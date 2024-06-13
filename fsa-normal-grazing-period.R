@@ -28,7 +28,7 @@ fsa_normal_grazing_period <-
   dplyr::select(!c(`Crop Code`, `Crop Type`)) %>%
   dplyr::mutate(dplyr::across(c(`Grazing Period State Date`, `Grazing Period End Date`), lubridate::as_date)) %>%
   dplyr::arrange(FSA_CODE, `Crop Name`, `Type Name`, `Grazing Period State Date`) %>%
-  dplyr::select(FSA_CODE, `Crop Name`, `Type Name`, `Grazing Period State Date`, `Grazing Period End Date`) %T>%
+  dplyr::select(FSA_CODE, `Crop Name`, `Type Name`, `Grazing Period Start Date` = `Grazing Period State Date`, `Grazing Period End Date`) %T>%
   readr::write_csv("fsa-normal-grazing-period.csv")
 
 

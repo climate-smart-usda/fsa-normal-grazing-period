@@ -1,4 +1,4 @@
-FSA_CODE,Crop Name,Type Name,Grazing Period State Date,Grazing Period End Date
+FSA_CODE,Crop Name,Type Name,Grazing Period Start Date,Grazing Period End Date
 01001,Grass,Annual Ryegrass,2021-11-29,2022-04-30
 01001,Grass,Bahia,2022-03-31,2022-11-15
 01001,Grass,Coastal Bermuda,2022-03-31,2022-11-15
