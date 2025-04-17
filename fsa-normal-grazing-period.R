@@ -3,37 +3,101 @@ library(magrittr)
 library(khroma)
 library(patchwork)
 
-# Crops as defined by the FSA
-fsa_crops <- 
-  readxl::read_excel("data-raw/Crop Key 1.xlsx")
+## The FSA county definitions 
+fsa_counties <-
+  sf::read_sf("/vsizip/../fsa-lfp-eligibility/fsa-counties/FSA_Counties_dd17.gdb.zip") %>%
+  dplyr::select(`FSA Code` = FSA_STCOU,
+                `State Name` = STATENAME,
+                `County Name` = FSA_Name) %>%
+  {
+    # Round-trip to geojson to get rid of strange curved geometry
+    tmp <- tempfile(fileext = ".geojson")
+    sf::write_sf(., tmp,
+                 delete_dsn = TRUE)
+    sf::read_sf(tmp)
+  } %>%
+  dplyr::group_by(`FSA Code`, `State Name`, `County Name`) %>%
+  dplyr::summarise(.groups = "drop") %>%
+  sf::st_transform("EPSG:5070") %>%
+  sf::st_make_valid() %>%
+  sf::st_intersection(  
+    tigris::counties(cb = TRUE) %>%
+      sf::st_union() %>%
+      sf::st_transform("EPSG:5070")
+  ) %>%
+  rmapshaper::ms_simplify(keep = 0.015) %>%
+  sf::st_make_valid() %>%
+  sf::st_transform("OGC:CRS84") %>%
+  sf::st_make_valid()
+
+
+%>%
+  tigris::shift_geometry() %>%
+  dplyr::filter(!(FSA_STATE %in% c("14-GU", "52-VI", "60-AS", "69-MP"))) %>%
+  sf::write_sf("fsa-counties.geojson",
+               delete_dsn = TRUE)
 
 # FSA-defined Normal Grazing Periods (2022)
 fsa_normal_grazing_period <-
-  dplyr::bind_rows(readxl::read_excel("data-raw/2022GrazingPeriods.xlsx"),
-                   readxl::read_excel("data-raw/AlaskaGrazing.xlsx") %>%
-                     dplyr::rename(`Crop Type` = `Crop Type Code`,
-                                   Use = `Crop Use`)
-                   ) %>%
-  tidyr::unite("FSA_CODE", c(`State Code`, `County Code`), sep = "") %>%
-  dplyr::select(FSA_CODE, `Crop Code`, `Crop Type`, 
-                `Grazing Period State Date`, `Grazing Period End Date`) %>%
-  # This crop type seems to have been misstyped
-  dplyr::mutate(`Crop Type` = ifelse(`Crop Type` == "EAS", "AES", `Crop Type`)) %>%
-  dplyr::left_join(dplyr::select(fsa_crops,
-                                 `Crop Code`,
-                                 `Crop Name`,
-                                 `Type Code`,
-                                 `Type Name`), 
-                   by = c("Crop Code", "Crop Type" = "Type Code")) %>%
-  dplyr::select(!c(`Crop Code`, `Crop Type`)) %>%
-  dplyr::mutate(dplyr::across(c(`Grazing Period State Date`, `Grazing Period End Date`), lubridate::as_date)) %>%
-  dplyr::arrange(FSA_CODE, `Crop Name`, `Type Name`, `Grazing Period State Date`) %>%
-  dplyr::select(FSA_CODE, `Crop Name`, `Type Name`, `Grazing Period Start Date` = `Grazing Period State Date`, `Grazing Period End Date`) %T>%
+  unzip(zipfile = "foia/2025-FSA-04691-F Bocinsky.zip",
+        files = "LFP_NormalGrazingPeriodsReport.xlsx",
+        exdir = tempdir()) %>%
+  readxl::read_excel() %>%
+  # Some start and end dates are NA — remove
+  dplyr::filter(!is.na(`Normal Grazing Period Start Date`)) %>%
+  tidyr::unite(col = "FSA Code",
+               c(`State FSA Code`, `County FSA Code`), 
+               sep = "", 
+               remove = FALSE) %>%
+  dplyr::rename(`Pasture Type` = `Pasture Grazing Type`) %>%
+  dplyr::arrange(`FSA Code`, `Pasture Type`, `Program Year`) %>%
+  dplyr::mutate(`Normal Grazing Period Start Date` = lubridate::as_date(`Normal Grazing Period Start Date`),
+                `Normal Grazing Period End Date` = lubridate::as_date(`Normal Grazing Period End Date`),) %>%
+  # Split northern and southern Shoshone County, ID, which are separated in the FSA county dataset
+  dplyr::left_join(tibble::tibble(`FSA Code` = c("16079", "16079"),
+                                  `New Code` = c("16055", "16009")),
+                   relationship = "many-to-many") %>%
+  dplyr::mutate(`FSA Code` = ifelse(!is.na(`New Code`), `New Code`, `FSA Code`),
+                # Correct name of "Full Season Improved Mixed Pasture" in certain records
+                `Pasture Type` = dplyr::case_match(`Pasture Type`,
+                                                   "Full Season Improved Mixed Pastures" ~ "Full Season Improved Mixed Pasture",
+                                                   .default = `Pasture Type`),
+                # Correct erroneous year in duplicated start date of two 2010 Utah records
+                `Normal Grazing Period Start Date` = 
+                  case_when(`Program Year` == 2010 & `FSA Code` %in% c("49031", "49041") ~ lubridate::as_date("2010-04-01"),
+                            .default = `Normal Grazing Period Start Date`),
+                # Correct erroneous Native Pasture duplicated start date in 2012 Kansas data (should be 2012-05-01)
+                `Normal Grazing Period Start Date` = 
+                  case_when(`Program Year` == 2012 & `State Name` == "Kansas" ~ lubridate::as_date("2012-05-01"),
+                            .default = `Normal Grazing Period Start Date`),
+                # Correct erroneous Native Pasture duplicated start date in 2013 Kansas data (should be 2013-05-01)
+                `Normal Grazing Period Start Date` = 
+                  case_when(`Program Year` == 2013 & `State Name` == "Kansas" ~ lubridate::as_date("2013-05-01"),
+                            .default = `Normal Grazing Period Start Date`),
+                # Correct erroneous Native Pasture duplicated start date in 2014 Kansas data (should be 2014-05-01)
+                `Normal Grazing Period Start Date` = 
+                  case_when(`Program Year` == 2014 & `State Name` == "Kansas" ~ lubridate::as_date("2014-05-01"),
+                            .default = `Normal Grazing Period Start Date`),
+                # Correct erroneous Forage Sorghum duplicated start date in 2016 Mississippi data (should be 2016-06-01)
+                `Normal Grazing Period Start Date` = 
+                  case_when(`Program Year` == 2016 & `State Name` == "Mississippi" ~ lubridate::as_date("2016-06-01"),
+                            .default = `Normal Grazing Period Start Date`),
+                # Correct erroneous duplicated end date in 2016 (all forage types) in
+                # Prairie County, MT data (should be 2016-12-01 based on surrounding counties)
+                `Normal Grazing Period End Date` = 
+                  case_when(`Program Year` == 2016 & `FSA Code` == "30079" ~ lubridate::as_date("2016-12-01"),
+                            .default = `Normal Grazing Period End Date`)
+                ) %>%
+  dplyr::select(!`New Code`) %>%
+  dplyr::filter(
+    !(`County Name` %in% 
+        c("Shoshone",
+          # Remove duplicated "St. Louis, St. Louis City" records
+          "St. Louis, St. Louis City")
+    )
+  ) %>%
+  dplyr::distinct() %T>%
   readr::write_csv("fsa-normal-grazing-period.csv")
-
-
-
-
 
 ## yday cyclic palette
 dates <- seq(lubridate::as_date("1999-07-01"), lubridate::as_date("2000-06-30"), "1 day")
@@ -68,43 +132,41 @@ yday_legend <-
         panel.grid = element_blank()
   )
 
-mean_yday_prep_start <- function(start, end){
-  lubridate::year(start) <- ifelse(lubridate::month(start) > lubridate::month(end), 2000, 2001)
+mean_yday_prep_start <-
+  function(start, end){
+    lubridate::year(start) <- ifelse(lubridate::month(start) > lubridate::month(end), 2000, 2001)
+    
+    return(start)
+  }
 
-  return(start)
-
-}
-
-mean_yday_prep_end <- function(start, end){
-  lubridate::year(end) <- 2001
-
-  return(end)
-
-}
-
-
-
+mean_yday_prep_end <- 
+  function(start, end){
+    lubridate::year(end) <- 2001
+    
+    return(end)
+  }
 
 lfp_growing_seasons <-
-  lfp_eligibility %>%
-  dplyr::select(PROGRAM_YEAR, FSA_CODE, PASTURE_TYPE, GROWING_SEASON_START, GROWING_SEASON_END) %>%
-  dplyr::mutate(GROWING_SEASON_START = mean_yday_prep_start(GROWING_SEASON_START,GROWING_SEASON_END),
-                GROWING_SEASON_END = mean_yday_prep_end(GROWING_SEASON_START,GROWING_SEASON_END)
+  fsa_normal_grazing_period %>%
+  dplyr::filter(!is.na(`Normal Grazing Period Start Date`)) %>%
+  dplyr::select(`Program Year`, `FSA Code`, `Pasture Type`, `Normal Grazing Period Start Date`, `Normal Grazing Period End Date`) %>%
+  dplyr::mutate(`Normal Grazing Period Start Date` = mean_yday_prep_start(`Normal Grazing Period Start Date`, `Normal Grazing Period End Date`),
+                `Normal Grazing Period End Date` = mean_yday_prep_end(`Normal Grazing Period Start Date`, `Normal Grazing Period End Date`)
   ) %>%
-  dplyr::arrange(PASTURE_TYPE) %>%
-  dplyr::group_by(FSA_CODE, PASTURE_TYPE) %>%
-  dplyr::summarise(`Start Date` = lubridate::yday(mean(GROWING_SEASON_START, na.rm = TRUE)),
-                   `End Date` = lubridate::yday(mean(GROWING_SEASON_END, na.rm = TRUE))) %>%
-  dplyr::group_by(PASTURE_TYPE) %>%
+  dplyr::arrange(`Pasture Type`) %>%
+  dplyr::group_by(`Program Year`, `FSA Code`, `Pasture Type`) %>%
+  dplyr::summarise(`Start Date` = lubridate::yday(mean(`Normal Grazing Period Start Date`, na.rm = TRUE)),
+                   `End Date` = lubridate::yday(mean(`Normal Grazing Period End Date`, na.rm = TRUE))) %>%
+  dplyr::group_by(`Program Year`, `Pasture Type`) %>%
   tidyr::nest() %>%
-  dplyr::arrange(PASTURE_TYPE) %>%
+  dplyr::arrange(`Pasture Type`, `Program Year`) %>%
   dplyr::rowwise() %>%
   dplyr::mutate(
     graph = list(
       (
-
-        dplyr::left_join(conus, data,
-                         by = c("county_fips" = "FSA_CODE")) %>%
+        
+        dplyr::left_join(fsa_counties, data,
+                         by = c("FSA_CODE" = "FSA Code")) %>%
           tidyr::pivot_longer(`Start Date`:`End Date`) %>%
           dplyr::mutate(name = factor(name,
                                       levels = c("Start Date",
@@ -116,19 +178,19 @@ lfp_growing_seasons <-
           ggplot2::ggplot() +
           geom_sf(aes(fill = color),
                   col = "white") +
-          geom_sf(data = conus %>%
-                    dplyr::group_by(state_fips) %>%
+          geom_sf(data = fsa_counties %>%
+                    dplyr::group_by(FSA_STATE) %>%
                     dplyr::summarise(),
                   col = "white",
                   fill = NA,
                   linewidth = 0.5) +
           scale_fill_identity(na.value = "grey80") +
-          ggplot2::labs(title = PASTURE_TYPE,
+          ggplot2::labs(title = paste0(`Pasture Type`, " — ", `Program Year`),
                         subtitle = "Normal Grazing Period") +
           theme_void(base_size = 24) +
           theme(  plot.title = element_text(hjust = 0.5),
                   plot.subtitle = element_text(hjust = 0.5),
-                  legend.position = c(0.5,0.125),
+                  legend.position.inside = c(0.5,0.125),
                   legend.title = element_text(size = 14),
                   legend.text = element_text(size = 12),
                   strip.text.x = element_text(margin = margin(b = 5))) +
@@ -138,14 +200,14 @@ lfp_growing_seasons <-
                                    right = 0.7,
                                    bottom = 0,
                                    top = 0.4)
-
+        
       )
     )
   )
 
-unlink("fsa-lfp-grazing-periods.pdf")
+unlink("fsa-normal-grazing-period.pdf")
 
-cairo_pdf(filename = "fsa-lfp-grazing-periods.pdf",
+cairo_pdf(filename = "fsa-normal-grazing-period.pdf",
           width = 16,
           height = 6.86,
           bg = "white",
@@ -155,363 +217,45 @@ lfp_growing_seasons$graph
 
 dev.off()
 
-### 2022 Normal Grazing Periods (via Holly Prendeville)
-conus_names <-
-  conus %>%
-  dplyr::select(CONUS_CODE = county_fips,
-                CONUS_STATE = state_name,
-                CONUS_COUNTY = county_name) %>%
-  sf::st_drop_geometry() %>%
-  dplyr::arrange(CONUS_CODE) %>%
-  dplyr::distinct()
 
-fsa_names <-
-  readxl::read_excel("data-raw/fsa-lfp-grazing-periods/2022GrazingPeriods.xlsx") %>%
-  dplyr::bind_rows(
-    readxl::read_excel("data-raw/fsa-lfp-grazing-periods/AlaskaGrazing.xlsx") %>%
-      dplyr::rename(`County Name` = `County name`)
-  ) %>%
-  dplyr::filter(`State Name` != "Puerto Rico") %>%
-  dplyr::transmute(FSA_CODE = paste0(`State Code`, `County Code`),
-                   FSA_STATE = `State Name`,
-                   FSA_COUNTY = `County Name`) %>%
-  dplyr::distinct() %>%
-  dplyr::arrange(FSA_CODE)
+## ISSUES
 
-
-# fsa_names <-
-#   readr::read_csv("https://raw.githubusercontent.com/mt-climate-office/fsa-lfp-eligibility/main/fsa-lfp-eligibility.csv") %>%
-#   dplyr::transmute(FSA_CODE,
-#                    FSA_STATE,
-#                    FSA_COUNTY = FSA_COUNTY_NAME) %>%
-#   dplyr::filter(FSA_STATE != "52-VI",
-#                 FSA_STATE != "72-PR") %>%
-#   dplyr::distinct() %>%
-#   dplyr::arrange(FSA_CODE)
-
-
-bind_rows(
-  anti_join(fsa_names,
-            conus_names,
-            by = c("FSA_CODE" = "CONUS_CODE")),
-  anti_join(conus_names,
-            fsa_names,
-            by = c("CONUS_CODE" = "FSA_CODE"))
-)
-
-
-
-
-ngp_2022 <-
-  readxl::read_excel("data-raw/fsa-lfp-grazing-periods/2022GrazingPeriods.xlsx") %>%
-  dplyr::mutate(FSA_CODE = paste0(`State Code`, `County Code`),
-                dplyr::across(`Grazing Period State Date`:`Grazing Period End Date`, lubridate::as_date)) %>%
-  dplyr::select(-Use, -`Planting Period`) %>%
-  dplyr::left_join(
-    readxl::read_excel("data-raw/fsa-lfp-grazing-periods/Crop Key 1.xlsx") %>%
-      dplyr::select(`Type Name`,
-                    `Type Code`,
-                    `Crop Code`),
-    by = c("Crop Type" = "Type Code",
-           "Crop Code" = "Crop Code"
-    )) %>%
-  dplyr::transmute(
-    FSA_CODE,
-    STATE = `State Name`,
-    COUNTY = `County Name`,
-    `Crop Type` = stringr::str_to_title(`Crop Name`),
-    `Crop Name` = `Type Name`,
-    Practice = factor(Practice,
-                      levels = c("N", "I"),
-                      labels = c("Non-irrigated", "Irrigated"),
-                      ordered = TRUE),
-    `Grazing Period State Date`,
-    `Grazing Period End Date`
-  )
-
-#
-# %>%
-#   dplyr::group_by(across(c(-`Crop Name`))) %>%
-#   dplyr::summarise(`Crop Names` = paste0(`Crop Name`, collapse = "; "),
-#                    .groups = "drop")
-#
-#
-#
-#
-#   dplyr::group_by(PASTURE_TYPE) %>%
-#   tidyr::nest() %>%
-#   dplyr::arrange(PASTURE_TYPE) %>%
-#   dplyr::rowwise() %>%
-#   dplyr::mutate(
-#     graph = list(
-#       (
-#
-#         dplyr::left_join(conus, data,
-#                          by = c("GEOID" = "FSA_CODE")) %>%
-#           tidyr::pivot_longer(`Start Date`:`End Date`) %>%
-#           dplyr::mutate(name = factor(name,
-#                                       levels = c("Start Date",
-#                                                  "End Date"),
-#                                       ordered = TRUE)) %>%
-#           dplyr::left_join(yday_pal,
-#                            by = c("value" = "yday")) %>%
-#           dplyr::mutate(color = tidyr::replace_na(color, "grey80")) %>%
-#           ggplot2::ggplot() +
-#           geom_sf(aes(fill = color),
-#                   col = "white") +
-#           geom_sf(data = conus %>%
-#                     dplyr::group_by(STATEFP) %>%
-#                     dplyr::summarise(),
-#                   col = "white",
-#                   fill = NA,
-#                   linewidth = 0.5) +
-#           scale_fill_identity(na.value = "grey80") +
-#           ggplot2::labs(title = PASTURE_TYPE,
-#                         subtitle = "Normal Grazing Period") +
-#           theme_void(base_size = 24) +
-#           theme(  plot.title = element_text(hjust = 0.5),
-#                   plot.subtitle = element_text(hjust = 0.5),
-#                   legend.position = c(0.5,0.125),
-#                   legend.title = element_text(size = 14),
-#                   legend.text = element_text(size = 12),
-#                   strip.text.x = element_text(margin = margin(b = 5))) +
-#           ggplot2::facet_grid(cols = dplyr::vars(name)) +
-#           patchwork::inset_element(yday_legend,
-#                                    left = 0.3,
-#                                    right = 0.7,
-#                                    bottom = 0,
-#                                    top = 0.4)
-#
-#       )
-#     )
-#   )
-#
-# unlink("fsa-lfp-grazing-periods-2022.pdf")
-#
-# cairo_pdf(filename = "fsa-lfp-grazing-periods-2022.pdf",
-#           width = 16,
-#           height = 6.86,
-#           bg = "white",
-#           onefile = TRUE)
-#
-# ngp_2022$graph
-#
-# dev.off()
-
-### Standards for Calculating Normal Grazing Periods
-full_season <-
-  arrow::read_feather("~/git/mt-climate-office/nclimgrid-normal-grazing-period/nclimgrid-normal-grazing-period.arrow") %>%
-  as.data.frame(xy = TRUE) %>%
-  magrittr::set_names(c("x","y","Start Date","End Date")) %>%
-  dplyr::mutate(Season = "Full Season") %>%
-  tidyr::pivot_longer(`Start Date`:`End Date`,
-                      names_to = "Type",
-                      values_to = "yday")
-
-
-full_season <-
-  terra::rast("~/git/mt-climate-office/nclimgrid-normal-grazing-period/data-derived/full_season_round.nc") %>%
-  terra::as.points() %>%
-  sf::st_as_sf() %>%
-  sf::st_transform("EPSG:5070") %>%
-  sf::st_intersection(conus %>%
-                        sf::st_transform("EPSG:5070")) %>%
-  dplyr::select(full_season_start = full_season_round_1,
-                full_season_end = full_season_round_2,
-                GEOID) %>%
-  sf::st_drop_geometry() %>%
-  dplyr::mutate(dplyr::across(full_season_start:full_season_end, ~as.Date(., origin = '2017-12-31')),
-                full_season_end = ifelse(full_season_end <= full_season_start,
-                                         full_season_end + lubridate::years(1),
-                                         full_season_end),
-                full_season_end = lubridate::as_date(full_season_end)) %>%
-  tibble::as_tibble() %>%
-  dplyr::group_by(GEOID) %>%
-  dplyr::summarise(full_season_start = lubridate::yday(min(full_season_start, na.rm = TRUE)),
-                   full_season_end = lubridate::yday(max(full_season_end, na.rm = TRUE))) %>%
-  dplyr::left_join(conus, .)
-
-nclimgrid <-
-  terra::rast("~/git/mt-climate-office/nclimgrid-normal-grazing-period/data-derived/cool_season_round.nc") %>%
-  magrittr::set_names(c("start", "end")) %>%
-  terra::as.points() %>%
-  sf::st_as_sf() %>%
-  dplyr::mutate(type = "Cool Season") %>%
-  dplyr::bind_rows(terra::rast("~/git/mt-climate-office/nclimgrid-normal-grazing-period/data-derived/full_season_round.nc") %>%
-                     magrittr::set_names(c("start", "end")) %>%
-                     terra::as.points() %>%
-                     sf::st_as_sf() %>%
-                     dplyr::mutate(type = "Full Season")) %>%
-  sf::st_transform("EPSG:5070") %>%
-  sf::st_intersection(conus %>%
-                        sf::st_transform("EPSG:5070")) %>%
-  dplyr::select(start,
-                end,
-                type,
-                GEOID) %>%
-  sf::st_drop_geometry() %>%
-  dplyr::mutate(dplyr::across(start:end, ~as.Date(., origin = '2017-12-31')),
-                end = ifelse(end <= start,
-                             end + lubridate::years(1),
-                             end),
-                end = lubridate::as_date(end)) %>%
-  tibble::as_tibble() %>%
-  dplyr::group_by(type,GEOID) %>%
-  dplyr::summarise(start = lubridate::yday(min(start, na.rm = TRUE)),
-                   end = lubridate::yday(max(end, na.rm = TRUE)))
-
-
-nclimgrid %<>%
-  dplyr::rename(`Start Date` = start,
-                `End Date` = end) %>%
-  dplyr::arrange(type) %>%
-  # dplyr::group_by(FSA_CODE, PASTURE_TYPE) %>%
-  # dplyr::summarise(`Start Date` = lubridate::yday(mean(GROWING_SEASON_START, na.rm = TRUE)),
-  #                  `End Date` = lubridate::yday(mean(GROWING_SEASON_END, na.rm = TRUE))) %>%
-  dplyr::group_by(type) %>%
-  tidyr::nest() %>%
-  dplyr::arrange(type) %>%
-  dplyr::rowwise() %>%
-  dplyr::mutate(
-    graph = list(
-      (
-        dplyr::left_join(conus %>%
-                           sf::st_transform(5070) %>%
-                           rmapshaper::ms_simplify(), data) %>%
-          tidyr::pivot_longer(`Start Date`:`End Date`) %>%
-          dplyr::mutate(name = factor(name,
-                                      levels = c("Start Date",
-                                                 "End Date"),
-                                      ordered = TRUE)) %>%
-          dplyr::left_join(yday_pal,
-                           by = c("value" = "yday")) %>%
-          dplyr::mutate(color = tidyr::replace_na(color, "grey80")) %>%
-          ggplot2::ggplot() +
-          geom_sf(aes(fill = color),
-                  col = "white") +
-          geom_sf(data = conus %>%
-                    dplyr::group_by(STATEFP) %>%
-                    dplyr::summarise(),
-                  col = "white",
-                  fill = NA,
-                  linewidth = 0.5) +
-          scale_fill_identity(na.value = "grey80") +
-          ggplot2::labs(title = type,
-                        subtitle = "Normal Grazing Period") +
-          theme_void(base_size = 24) +
-          theme(  plot.title = element_text(hjust = 0.5),
-                  plot.subtitle = element_text(hjust = 0.5),
-                  legend.position = c(0.5,0.125),
-                  legend.title = element_text(size = 14),
-                  legend.text = element_text(size = 12),
-                  strip.text.x = element_text(margin = margin(b = 5))) +
-          ggplot2::facet_grid(cols = dplyr::vars(name)) +
-          patchwork::inset_element(yday_legend,
-                                   left = 0.3,
-                                   right = 0.7,
-                                   bottom = 0,
-                                   top = 0.4)
-
-      )
+known_issues <-fsa_normal_grazing_period %>%
+  dplyr::select(`Program Year`, 
+                `FSA Code`,
+                `Pasture Type`,
+                `Normal Grazing Period Start Date`,
+                `Normal Grazing Period End Date`) %>%
+  {
+    dplyr::left_join(
+      dplyr::select(., `Program Year`, 
+                    `FSA Code`,
+                    `Pasture Type`) %>%
+        {dplyr::filter(., duplicated(.))},
+      .
     )
-  )
-
-unlink("fsa-lfp-grazing-periods-nclimgrid.pdf")
-
-cairo_pdf(filename = "fsa-lfp-grazing-periods-nclimgrid.pdf",
-          width = 16,
-          height = 6.86,
-          bg = "white",
-          onefile = TRUE)
-
-nclimgrid$graph
-
-dev.off()
-
-# dplyr::bind_rows(full_season, cool_season)
-full_season %>%
-  dplyr::mutate(Type = factor(Type,
-                              levels = c("Start Date",
-                                         "End Date"),
-                              ordered = TRUE)) %>%
-  dplyr::left_join(yday_pal,
-                   by = c("yday" = "yday"),
-                   multiple = "all") %>%
-  dplyr::mutate(color = tidyr::replace_na(color, "grey80")) %>%
-  ggplot2::ggplot(aes(x = x,
-                      y = y,
-                      fill = color)) +
-  geom_raster() +
-  geom_sf(data = conus %>%
-            dplyr::group_by(STATEFP) %>%
-            dplyr::summarise(),
-          col = "white",
-          fill = NA,
-          linewidth = 0.5) +
-  scale_fill_identity(na.value = "grey80") +
-  ggplot2::labs(title = "NAP-190",
-                subtitle = "Idealized Normal Grazing Period") +
-  theme_void(base_size = 24) +
-  theme(  plot.title = element_text(hjust = 0.5),
-          plot.subtitle = element_text(hjust = 0.5),
-          legend.position = c(0.5,0.125),
-          legend.title = element_text(size = 14),
-          legend.text = element_text(size = 12),
-          strip.text.x = element_text(margin = margin(b = 5))) +
-  ggplot2::facet_grid(cols = dplyr::vars(Type)) +
-  patchwork::inset_element(yday_legend,
-                           left = 0.3,
-                           right = 0.7,
-                           bottom = 0,
-                           top = 0.4)
-
-lfp_eligibility %>%
-  # dplyr::filter(!(FSA_CODE %in% conus$county_fips)) %>%
-  dplyr::select(FSA_CODE, FSA_STATE, FSA_COUNTY_NAME) %>%
-  dplyr::arrange(FSA_CODE) %>%
-  dplyr::distinct()
-
-
-lfp_eligibility %>%
-  dplyr::select(PROGRAM_YEAR, FSA_CODE, FSA_COUNTY_NAME, FSA_STATE, PASTURE_TYPE, PASTURE_CODE, GROWING_SEASON_START, GROWING_SEASON_END) %>%
-  dplyr::distinct() %>%
-  dplyr::arrange(FSA_CODE, PASTURE_TYPE, PROGRAM_YEAR)
+  } %>%
+  dplyr::right_join(fsa_normal_grazing_period, .) %>%
+  dplyr::arrange(`Program Year`, 
+                 `FSA Code`,
+                 `Pasture Type`,
+                 `State Name`, `County Name`) %>%
+  distinct() %T>%
+  readr::write_csv("2025-FSA-04691-F Bocinsky.known_issues.csv")
 
 
 
-# Grazing Periods from Three Sources
+# odd_start_records <-
+  fsa_normal_grazing_period %>%
+  dplyr::filter(!(lubridate::mday(`Normal Grazing Period Start Date`) %in% c(1,15))) %>%
+    nrow()
+  # 25285 records
 
-ngp_2022 <-
-  readxl::read_excel("data-raw/fsa-lfp-grazing-periods/2022GrazingPeriods.xlsx") %>%
-  dplyr::mutate(FSA_CODE = paste0(`State Code`, `County Code`),
-                dplyr::across(`Grazing Period State Date`:`Grazing Period End Date`, lubridate::as_date)) %>%
-  dplyr::select(-Use, -`Planting Period`) %>%
-  dplyr::left_join(
-    readxl::read_excel("data-raw/fsa-lfp-grazing-periods/Crop Key 1.xlsx") %>%
-      dplyr::select(`Type Name`,
-                    `Type Code`,
-                    `Crop Code`),
-    by = c("Crop Type" = "Type Code",
-           "Crop Code" = "Crop Code"
+# odd_end_records <-
+  fsa_normal_grazing_period %>%
+  dplyr::filter(!(
+    (lubridate::mday(`Normal Grazing Period End Date`) %in% c(1,15)) |
+      (lubridate::mday(`Normal Grazing Period End Date`) == lubridate::days_in_month(`Normal Grazing Period End Date`))
     )) %>%
-  dplyr::transmute(
-    FSA_CODE,
-    STATE = `State Name`,
-    COUNTY = `County Name`,
-    `Crop Type` = stringr::str_to_title(`Crop Name`),
-    `Crop Name` = `Type Name`,
-    Practice = factor(Practice,
-                      levels = c("N", "I"),
-                      labels = c("Non-irrigated", "Irrigated"),
-                      ordered = TRUE),
-    `Grazing Period State Date`,
-    `Grazing Period End Date`
-  ) %>%
-  dplyr::group_by(across(c(-`Crop Name`))) %>%
-  dplyr::summarise(`Crop Names` = paste0(`Crop Name`, collapse = "; "),
-                   .groups = "drop")
-
-library(magrittr)
-readr::read_csv("data-raw/lfp/FY2021_012_Assistance_Full_20220908/FY2021_012_Assistance_Full_20220909_7.csv") %>%
-  magrittr::extract(1,) %>%
-  as.list()
+  nrow()
+  # 30490 records
