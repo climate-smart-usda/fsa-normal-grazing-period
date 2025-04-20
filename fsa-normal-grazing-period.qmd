@@ -1,196 +1,262 @@
 ---
-title: "Annual Normal Grazing Period Data from the Livestock Forage Disaster Program, 2008–2024"
-format: html
-editor: visual
+format:   
+  dashboard:
+    theme: yeti
 ---
 
-This repository is an archive of the annual county-level normal grazing period data for the [Livestock Forage Disaster Program](https://www.fsa.usda.gov/programs-and-services/disaster-assistance-program/livestock-forage/index). These data were acquired via Freedom of Information Act (FOIA) request `2025-FSA-04691-F` made by R. Kyle Bocinsky, Director of Climate Extension for the [Montana Climate Office](https://climate.umt.edu), to the US Department of Agriculture (USDA) [Farm Production and Conservation Business Center (FPAC-BC)](https://www.fpacbc.usda.gov). The request was submitted on February 14, 2025, and was fulfilled on April 15, 2025.
+```{r create-topojson}
+#| echo: false     # hides the code
+#| results: "hide" # hides printed output
+#| message: false  # hdides messages (e.g. from package loading)
+#| warning: false  # hides warnings
 
-The original FOIA request, copies of all email communications with the USDA FPAC-BC, and data as received are in the [`foia`](/foia) directory and [`foia/2025-FSA-04691-F Bocinsky.zip`](/foia/2025-FSA-04691-F%20Bocinsky.zip) zip archive.
+library(sf)
+library(magrittr)
 
-Data were ingested into the [R statistical framework](https://www.r-project.org), cleaned to a common set of fields, and filtered to only include counties in the contiguous United States. The cleaned data were written to a consolidated CSV file ([`fsa-normal-grazing-period.csv`](/fsa-normal-grazing-period.csv)) and visualized in a multi-page PDF ([`fsa-normal-grazing-period.pdf`](/fsa-normal-grazing-period.pdf)). The [`fsa-normal-grazing-period.R`](/fsa-normal-grazing-period.R) script performs these steps.
+dir.create("assets",
+           recursive = TRUE,
+           showWarnings = FALSE)
 
-The FSA uses slightly different county or county-equivalent definitions for their service areas than the standard ANSI FIPS codes used by the US Census. The FSA counties are included in the [`fsa-counties`](/fsa-counties) directory. FSA county codes are described in [FSA Handbook 1-CM](https://www.fsa.usda.gov/Internet/FSA_File/1-cm_r03_a80.pdf), Exhibit 101.
+readr::read_csv("fsa-normal-grazing-period.csv") %>%
+  dplyr::transmute(
+    id = `FSA Code`,
+    # state = `State Name`,
+    # county = `County Name`,
+    year = `Program Year`,
+    type = `Pasture Type`,
+    start_date = `Normal Grazing Period Start Date`,
+    end_date = `Normal Grazing Period End Date`,
+    start_yday = lubridate::yday(`Normal Grazing Period Start Date`),
+    end_yday = lubridate::yday(`Normal Grazing Period End Date`)) %>%
+  readr::write_csv(
+    file.path(
+      "assets",
+      "fsa-normal-grazing-period-simple.csv"
+    ), 
+    quote = "all") 
 
-Data in the FOIA archive were produced by the USDA Farm Service Agency and are in the public domain. All other data, including processed tables and maps, were created by R. Kyle Bocinsky and are released under the [Creative Commons CCZero license](https://creativecommons.org/publicdomain/zero/1.0/). The [`fsa-lfp-eligibility.R`](/fsa-lfp-eligibility.R) script is copyright R. Kyle Bocinsky and released under the [MIT License](/LICENSE.md).
-
-This work was supported by a grant from the National Oceanic and Atmospheric Administration, [National Integrated Drought Information System](https://www.drought.gov) (University Corporation for Atmospheric Research subaward SUBAWD000858). We also acknowledge and appreciate the prompt and professional FOIA response we received from USDA FPAC-BC.
-
-Please contact Kyle Bocinsky ([kyle.bocinsky\@umontana.edu](mailto:kyle.bocinsky@umontana.edu)) with any questions.
-
-## Background: Determining Normal Grazing Periods
-
-Normal Grazing Periods (NGPs) are essential to USDA programs like the **Livestock Forage Disaster Program (LFP)** and the **Noninsured Crop Disaster Assistance Program (NAP)**. These periods represent the months during a year when grazing is typically feasible and sustainable for pasture and forage crops in a given region.
-
-Under the LFP, producers may qualify for payments when eligible grazing losses occur due to drought during the NGP. For NAP, grazing period determinations affect loss eligibility and assessment.
-
-NGPs are determined by the USDA Farm Service Agency (FSA), based on historical grazing practices, climatological data, and input from state and county FSA committees.
-
-### Key References
-
--   [FSA Handbook 1-NAP, Subparagraph 96B](https://www.fsa.usda.gov/Internet/FSA_File/1-nap_r01_a08.pdf) – Definitions and policies for normal grazing periods.
--   [LFP Fact Sheet](https://www.fsa.usda.gov/Assets/USDA-FSA-Public/usdafiles/FactSheets/livestock_forage_program-fact_sheet.pdf) – Program summary and eligibility criteria.
--   [NAP Basic Provisions](https://www.fsa.usda.gov/Internet/FSA_File/napbasicprovisions.pdf) – General definitions and rules governing grazing losses.
-
-NGPs inform:
-
--   The start and end of LFP eligibility,
--   Interactions with USDA Drought Monitor thresholds,
--   Historical baselines for range condition analysis.
-
-## Data Cleaning and Processing
-
-The original FOIA response included raw data in Excel format with inconsistencies, duplications, and occasional formatting or data entry errors. The following cleaning steps were performed in the `fsa-normal-grazing-period.R` script:
-
--   **Removed incomplete rows** with missing start or end dates.
--   **Corrected pasture type naming** inconsistencies (e.g., standardizing `"Full Season Improved Mixed Pastures"` to `"Full Season Improved Mixed Pasture"`).
--   **Adjusted specific records with known errors**, including:
-    -   Duplicated or incorrect start dates in **Utah (2010)**, **Kansas (2012–2014)**, **Mississippi (2016)**.
-    -   Incorrect end dates for **Prairie County, MT (2016)**.
--   **Handled geographic discrepancies**, including:
-    -   Splitting Shoshone County, ID into its northern and southern FSA divisions.
-    -   Removing erroneous or duplicated records for counties like `"St. Louis, St. Louis City"`.
--   **Created composite `FSA Code`** from state and county codes to match with spatial data.
--   **Converted date fields** to proper formats (`YYYY-MM-DD`) and sorted data for readability.
--   **Filtered out non-contiguous U.S. territories**.
--   **Ensured uniqueness** of each `(Program Year, FSA Code, Pasture Type)` triplet.
-
-All corrections are documented inline in the R script and intended to improve the utility of the dataset for longitudinal and spatial analysis.
-
-## Data Fields
-
-The cleaned CSV (`fsa-normal-grazing-period.csv`) includes the following fields:
-
-| Column | Description |
-|------------------------|------------------------------------------------|
-| `Program Year` | Calendar year the grazing period applies to |
-| `FSA Code` | Combined FSA state and county code (5 digits) |
-| `State FSA Code` | FSA numeric state code (2 digits) |
-| `County FSA Code` | FSA numeric county code (3 digits) |
-| `State Name` | Full name of the state |
-| `County Name` | Name of the county or county equivalent |
-| `Pasture Type` | Description of the grazing land type (e.g., Native Pasture, Small Grains) |
-| `Normal Grazing Period Start Date` | Start date of the normal grazing period (formatted YYYY-MM-DD) |
-| `Normal Grazing Period End Date` | End date of the normal grazing period (formatted YYYY-MM-DD) |
-
-This structure supports rich analysis of pasture grazing dynamics across space, time, and forage types.
-
-------------------------------------------------------------------------
-
-Let us know if you use these data in your own work or discover inconsistencies. Feedback and collaboration are welcome.
-
-
-
-
-**Quarto** is an open-source scientific and technical publishing system built on Pandoc. It allows to create dynamic content with Python, R, Julia, and Observable. In this document, I show how it is now possible to combine a an analysis written in **R** and a visualization written in **Observable** javascript.
-
-## 1. Data handling & analysis In R
-
-With the *sf* library, we import a gpkg file containing world countries and display it. 
-
-```{r message=FALSE}
-library("sf")
-countries <- st_read("data/countries.gpkg", quiet = T)
-plot(st_geometry(countries))
 ```
 
-We now import a statistical file in csv format containing the population and wealth of the countries of the world.
 
-```{r}
-data <- read.csv("data/stat.csv")
-head(data)
+```{r build-legend}
+#| echo: false     # hides the code
+#| results: "hide" # hides printed output
+#| message: false  # hides messages (e.g. from package loading)
+#| warning: false  # hides warnings
+
+library(magrittr)
+library(tidyverse)
+
+# sf::read_sf("fsa_counties.topojson") %>%
+#   dplyr::left_join(
+#     readr::read_csv("fsa-normal-grazing-period-simple.csv") %>%
+#       dplyr::filter(year == 2020, type == "Native Pasture")
+#   ) %>%
+#   mapview::mapview(zcol = "start")
+
+## yday cyclic palette
+dates <- seq(lubridate::as_date("1999-07-01"), lubridate::as_date("2000-06-30"), "1 day")
+color_shift <- 250
+colors <- as.character(khroma::color("romaO", reverse = TRUE)(366))
+colors <- colors[c((color_shift + 1):366,1:color_shift)]
+
+yday_pal <-
+  tibble::tibble(date = dates,
+                 color = colors,
+                 yday = lubridate::yday(dates)) %>%
+  dplyr::arrange(yday)
+
+yday_pal$color %>%
+  jsonlite::write_json("assets/colors.json", auto_unbox = TRUE)
+
+## yday cyclic legend
+yday_legend <-
+  yday_pal %>%
+  ggplot2::ggplot(mapping = aes(x = date,
+                                y = 1,
+                                fill = color)) +
+  geom_col(color = NA,
+           linewidth = 0) +
+  coord_polar(clip = "off") +
+  scale_fill_identity() +
+  scale_x_date(date_breaks = "month",
+               date_labels = "%b"
+  ) +
+  ylim(-1,1.25) +
+  theme_void(base_size = 24) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(size = 16, face = "bold"),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        panel.grid = element_blank(),
+        plot.margin = margin(0.1,0.1,0.1,0.1, unit = "in")
+  )
+
+ggsave(filename = "assets/legend.png",
+       plot = yday_legend,
+       device = ragg::agg_png,
+       height = 2.5,
+       width = 2.5,
+       dpi = 150)
 ```
-Then, we perform a join between the basemap and the statistical data by matching the identical codes. 
 
-```{r}
-world = merge(countries, data, by.x = "ISO3", by.y = "id")
+
+```{ojs inputs}
+//| content: card-toolbar
+
+// Create interactive inputs
+viewof year = Inputs.range(
+d3.extent(data, d => d.year),
+{
+step: 1, 
+label: "Year",
+value: 2024
+}
+)
+
+viewof type = Inputs.select(
+[...new Set(data.map(d => d.type))].sort(),
+{
+label: "Forage Type",
+value: "Native Pasture"
+}
+)
+
+viewof variable = Inputs.radio(
+new Map([
+["Season Start", "start_yday"], 
+["Season End", "end_yday"]
+]),
+{
+label: "Color by",
+value: "start_yday"
+}
+)
 ```
 
-To create a map in Observable, we first need to convert this data set to geojson format. To do this, we use the *geojsonsf* library. Then, the ojs_define() instruction allows to define this variable within ojs cells. To learn more about passing variables from R to Ojs, you can visit [this page](https://neocarto.github.io/Quarto/test.html). 
+```{ojs read-data}
+//| output: false
 
-```{r}
-library(geojsonsf)
-ojs_define(world_str = sf_geojson(world))
+// Import libraries
+scaleSequential = (await import("https://cdn.jsdelivr.net/npm/d3@7/+esm")).scaleSequential
+
+// a format for dates
+formatDate = d3.timeFormat("%b %d, %Y")  // e.g., "Apr 18, 2025"
+
+// counties
+
+//counties_file = await d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json");
+us = await d3.json("https://climate-smart-usda.github.io/fsa-counties-dd17/fsa-counties-dd17.topojson");
+//us = await d3.json("assets/fsa-counties-dd17-albers.topojson");
+counties = topojson.feature(us, us.objects.counties)
+
+// states, but just the boundaries between them
+//states_file = FileAttachment("assets/fsa_states.topojson").json()
+states = topojson.mesh(us, us.objects.states, (a, b) => a !== b)
+
+// normal grazing period data, simplified
+data = FileAttachment("assets/fsa-normal-grazing-period-simple.csv").csv({typed: true})
+
+// Load color palettes
+romaO = FileAttachment("assets/colors.json").json()
+color = scaleSequential()
+.domain([1, 366])
+.interpolator(t => romaO[Math.floor(t * (romaO.length - 1))])
+
 ```
 
-*NB: Note that here we have passed the variable as a string and not actually as an object. That's why we called it world_str. *
+```{ojs filter-join-data}
+//| output: false
 
-## 2. Geoviz in Observable Javascript (ojs)
+// Filter CSV data to current selections
+filtered = data.filter(d => d.year === year && d.type === type)
 
-The first thing to do here is to transform our string into a real object. To do this, we use the javascript statement *JSON.parse*.
+// Create a lookup table keyed by `id`
+valueById = Object.fromEntries(filtered.map(d => [String(d.id).padStart(5, "0"), d[variable]]))
+
+
+// Merge values into counties.features
+countiesFiltered = {
+  // Build lookup from filtered CSV: id → full row
+  const rowById = Object.fromEntries(
+        filtered.map(d => [String(d.id).padStart(5, "0"), d])
+  );
+
+  // Rebuild counties with joined properties
+  return {
+    type: "FeatureCollection",
+    features: counties.features.map(f => {
+      const id = String(f.id);
+      const row = rowById[id];
+
+      return {
+        ...f,
+        properties: {
+          id: f.id,
+          ...f.properties,
+          ...(row ?? {}),
+          value: row ? row[variable] : null  // explicitly add value for coloring
+        }
+      };
+    })
+  };
+}
+
+```
 
 ```{ojs}
-world = JSON.parse(world_str)
-```
+//| label: map
+//| title: FSA Normal Grazing Periods
 
-We display the attribute table to check that everything is ok. 
+Plot.plot({
+projection: {
+    type: "albers",
+    domain: counties
+  },
+grid: true,
+color: {legend: false}, // disable built-in color legend
+marks: [
+Plot.geo(countiesFiltered, {
+      fill: d => d.properties.value != null ? color(d.properties.value) : "#ccc"
+    }),
 
-```{ojs}
-Inputs.table(world.features.map((d) => d.properties))
-```
+Plot.dot(
+  countiesFiltered.features.map(f => {
+    const [x, y] = d3.geoCentroid(f);
+    return {
+      ...f.properties,
+      x,
+      y
+    };
+  }),
+  {
+    x: "x",
+    y: "y",
+    r: 3,
+    fill: "transparent",
+    stroke: "none",
+    tip: true,
+    title: d => `${d.county} County, ${d.state}
+FIPS: ${String(d.id).padStart(5, "0")}
+Crop Type: ${type}
+Start: ${d.start_date ? formatDate(d.start_date) : "None"}
+End: ${d.end_date ? formatDate(d.end_date) : "None"}`
+  }
+),
 
-We import the javascript libraries needed for mapping. Here d3-geo-projection@4 to have access to additional mapping projections and bertinjs for the mapping itself. 
-
-```{ojs}
-d3 = require("d3@7", "d3-geo-projection@4")
-bertin = require('bertin@0.9.16')
-```
-
-We define some elements for the interaction with the user.  
-
-```{ojs}
-viewof val = Inputs.radio(["pop", "gdp"], {
-  label: "Data to be displayed",
-  value: "pop"
+Plot.geo(states, {stroke: "white"}),
+ Plot.image([{}], { x: -76, y: 30, 
+ width: 100, 
+sheight: 100,
+// r = 10,
+ src: () => "assets/legend.png"}),
+]
 })
-viewof step = Inputs.range([10, 50], {
-  label: "step",
-  step: 1,
-  value: 15
-})
-viewof k = Inputs.range([5, 30], {
-  label: "Radius of the largest circle",
-  step: 1,
-  value: 15
-})
-viewof dorling = Inputs.toggle({ label: "Avoid overlap (dorling)" })
+
 ```
 
-Then we create a thematic interactive map with bertinjs. For more information about bertinjs, see [this](https://github.com/neocarto/bertin) and [that](https://observablehq.com/collection/@neocartocnrs/bertin).
+<!-- ## Row -->
 
-```{ojs}
-bertin.draw({
-  params: { projection: d3.geoBertin1953() },
-  layers: [
-    {
-      type: "header",
-      text:
-        (val == "pop" ? "World population" : "World GDP") + ` (step = ${step})`,
-      fill: "#cf429d"
-    },
-    {
-      type: "regularbubble",
-      geojson: world,
-      step: step,
-      values: val,
-      k: k,
-      fill: "#cf429d",
-      tooltip: [
-        "$NAMEen",
-        "",
-        "country value",
-        `$${val}`,
-        "",
-        "dot value",
-        "$___value" // ___value is the name of the computed field with the value of the point
-      ],
-      dorling: dorling
-    },
-    { geojson: world, fill: "white", fillOpacity: 0.3, stroke: "none" },
-    { type: "graticule" },
-    { type: "outline" }
-  ]
-})
-```
-
-
+<!-- ```{ojs} -->
+<!-- Inputs.table(filtered) -->
+<!-- ``` -->
