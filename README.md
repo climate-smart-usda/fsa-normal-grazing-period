@@ -84,7 +84,7 @@ The Quarto dashboard [`fsa-normal-grazing-period.qmd`](./fsa-normal-grazing-peri
 - A **tool for researchers and policymakers** to assess temporal trends
 
 <iframe src="fsa-normal-grazing-period.html" frameborder="0" allowfullscreen
-  style="width:100%;height:60vw;"></iframe>
+  style="width:100%;height:40vw;"></iframe>
   
 Access a full-screen version of the dashboard at:  
 <https://climate-smart-usda.github.io/fsa-normal-grazing-period/fsa-normal-grazing-period.html>
