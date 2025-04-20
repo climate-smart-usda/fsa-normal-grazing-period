@@ -2,7 +2,9 @@ This repository is an archive of the annual county-level normal grazing period d
 
 The original FOIA request, copies of all email communications with the USDA Farm Production and Conservation Business Center (FPAC-BC), and data as received are in the [`foia`](/foia) directory and [`foia/2025-FSA-04691-F Bocinsky.zip`](/foia/2025-FSA-04691-F%20Bocinsky.zip) zip archive.
 
+<div>
 <iframe src="fsa-normal-grazing-period.html" frameborder="0" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe>
+</div>
 
 Data were ingested into the [R statistical framework](https://www.r-project.org), were cleaned to a common set of fields and filtered to only include counties in the contiguous United States, and then were written to a consolidated CSV file ([`fsa-normal-grazing-period.csv`](/fsa-normal-grazing-period.csv)) and mapped in multi-page PDF ([`fsa-normal-grazing-period.pdf`](/fsa-normal-grazing-period.pdf)). [`fsa-normal-grazing-period.R`](/fsa-normal-grazing-period.R) is the R script that cleans the data and produces the maps.
 
