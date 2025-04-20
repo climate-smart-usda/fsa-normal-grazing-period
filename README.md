@@ -3,7 +3,7 @@ This repository is an archive of the annual county-level normal grazing period d
 The original FOIA request, copies of all email communications with the USDA Farm Production and Conservation Business Center (FPAC-BC), and data as received are in the [`foia`](/foia) directory and [`foia/2025-FSA-04691-F Bocinsky.zip`](/foia/2025-FSA-04691-F%20Bocinsky.zip) zip archive.
 
 <div style="padding:0;border: 1px solid #f7f7f7;">
-  <div style="position:relative;padding-top:70%;border: 1px solid #000000;">
+  <div style="position:relative;top:0;left:0; padding-top:70%;border: 1px solid #000000;">
     <iframe src="fsa-normal-grazing-period.html" frameborder="0" allowfullscreen
       style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe>
   </div>
