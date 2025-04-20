@@ -1,21 +1,21 @@
 [![GitHub Release](https://img.shields.io/github/v/release/climate-smart-usda/fsa-normal-grazing-period?label=GitHub%20Release&color=%239c27b0)](https://github.com/climate-smart-usda/fsa-normal-grazing-period)
-[![DOI](https://zenodo.org/badge/967595011.svg)](https://zenodo.org/badge/latestdoi/967595011)
+[![DOI](https://zenodo.org/badge/814751699.svg)](https://zenodo.org/badge/latestdoi/814751699)
 
 # FSA Normal Grazing Period Archive
 
-This repository is an archive of the annual county-level **Normal Grazing Period (NGP)** data for the USDA [Livestock Forage Disaster Program (LFP)](https://www.fsa.usda.gov/programs-and-services/disaster-assistance-program/livestock-forage/). Normal Grazing Periods define the historical timeframe during which forage is typically available for livestock grazing under non-drought conditions. These periods are used by the USDA Farm Service Agency (FSA) to determine eligibility and payment amounts for forage and crop loss due to drought.
+This repository is an archive of the annual county-level **Normal Grazing Period (NGP)** data for the USDA [Livestock Forage Disaster Program (LFP)](https://www.fsa.usda.gov/resources/programs/livestock-forage-disaster-program-lfp). Normal Grazing Periods define the historical timeframe during which forage is typically available for livestock grazing under non-drought conditions. These periods are used by the USDA Farm Service Agency (FSA) to determine eligibility and payment amounts for forage and crop loss due to drought.
 
-> For more information on the role of NGPs in the LFP, refer to [FSA Handbook 1-DF, Rev. 1 Amendment 19](https://www.fsa.usda.gov/Internet/FSA_File/1-df_r01_a19.pdf), especially paragraphs 211–213.
+> For more information on the role of NGPs in the LFP, refer to [FSA Handbook 1-LFP, Amendment 4](https://www.fsa.usda.gov/Internet/FSA_File/1lfp_a4.pdf).
 
 The data in this repository were acquired via FOIA request **2025-FSA-04691-F** by R. Kyle Bocinsky (Montana Climate Office) and fulfilled on April 15, 2025. The FOIA response, including the original Excel workbook, is archived in the [`foia`](./foia) directory.
 
 ## 🗂️ Contents
 
-- `foia/2025-FSA-04691-F Bocinsky.zip` — original FOIA data and correspondence
-- `fsa-normal-grazing-period.csv` — cleaned and consolidated data
-- `fsa-normal-grazing-period.R` — processing script
-- `fsa-normal-grazing-period.qmd` — Quarto dashboard source
-- `fsa-normal-grazing-period.html` — interactive summary dashboard
+- [`foia/2025-FSA-04691-F Bocinsky.zip`](./foia/2025-FSA-04691-F Bocinsky.zip) — original FOIA data and correspondence
+- [`fsa-normal-grazing-period.csv`](./fsa-normal-grazing-period.csv) — cleaned and consolidated data
+- [`fsa-normal-grazing-period.R`](./fsa-normal-grazing-period.R) — processing script
+- [`fsa-normal-grazing-period.qmd`](./fsa-normal-grazing-period.qmd) — Quarto dashboard source
+- [`fsa-normal-grazing-period.html`](./fsa-normal-grazing-period.html) — interactive summary dashboard
 
 ---
 
@@ -112,7 +112,7 @@ If using this data in published work, please cite:
 ## 📄 License
 
 - **Raw FOIA data** (USDA): Public Domain (17 USC § 105)
-- **Processed data & scripts**: © R. Kyle Bocinsky, released under [CC0](https://creativecommons.org/publicdomain/zero/1.0/) and [MIT License](./LICENSE.md) as applicable
+- **Processed data & scripts**: © R. Kyle Bocinsky, released under [CC0](https://creativecommons.org/publicdomain/zero/1.0/) and [MIT License](./LICENSE) as applicable
 
 ---
 
