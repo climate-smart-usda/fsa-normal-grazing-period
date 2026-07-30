@@ -284,10 +284,10 @@ Three things to know before using the data:
   routinely do — so `Grazing Period Start Date` should never be assumed
   to fall within `Program Year`.
 - **FSA codes are not FIPS codes.** They coincide for most counties, but
-  150 of the 3,095 FSA counties here carry a code that is not the FIPS
-  code of the county they cover, so resolve them through the FSA county
-  definitions rather than treating one as the other. See *Relating FSA
-  counties to Census counties* below.
+  20 of the 3,095 FSA counties here carry a code matching no FIPS county
+  they cover, so resolve them through the FSA county definitions rather
+  than treating one as the other. See *Relating FSA counties to Census
+  counties* below.
 - **A county absent from a program year is not necessarily an error.**
   FSA did not publish a grazing period for every county in every year;
   15 county-years are missing inside a county’s own span of reporting,
