@@ -1,5 +1,5 @@
 FSA Normal Grazing Period archive — QA report
-Generated: 2026-07-29 21:22:44 MDT
+Generated: 2026-07-30 03:37:13 UTC
 
 Grain: one record per program year, FSA county, and pasture type — the grain
 FSA reports at. No aggregation is applied. For Census geography, join the
