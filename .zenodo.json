@@ -1,0 +1,20 @@
+{
+  "upload_type": "dataset",
+  "title": "Normal Grazing Periods, 2008–2026 (Sustainable FSA Archive)",
+  "creators": [
+    {
+      "name": "USDA Farm Service Agency"
+    },
+    {
+      "name": "Bocinsky, R. Kyle",
+      "affiliation": "Montana Climate Office, University of Montana"
+    }
+  ],
+  "keywords": [
+    "USDA",
+    "FSA",
+    "drought",
+    "Livestock Forage Disaster Program"
+  ],
+  "license": "cc-zero"
+}

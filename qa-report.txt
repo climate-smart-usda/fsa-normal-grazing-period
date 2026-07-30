@@ -1,0 +1,54 @@
+FSA Normal Grazing Period archive — QA report
+Generated: 2026-07-29 21:22:44 MDT
+
+Grain: one record per program year, FSA county, and pasture type — the grain
+FSA reports at. No aggregation is applied. For Census geography, join the
+fsa-counties-dd17 or fsa-counties-dd22 archive, choosing the vintage that
+matches the program year.
+
+Records published: 244890
+FSA counties: 3095
+Program years: 2008-2026
+Pasture types: 16
+
+Invariants enforced (the run aborts on any violation):
+  * exactly one record per (program year, FSA county, pasture type)
+  * grazing period end date on or after its start date
+  * no missing values in any published field
+  * every FSA county resolves against FSA's published county definitions
+
+Dates outside [program year - 1, program year + 1]: 0
+
+Zero-length grazing periods: 3
+  Program Year,State FSA Code,County FSA Code,FSA State Name,FSA County Name,Pasture Type,Grazing Period Start Date,Grazing Period End Date
+  2024,20,203,Kansas,Wichita,Short Season Spring Small Grains,2024-05-15,2024-05-15
+  2025,20,203,Kansas,Wichita,Short Season Spring Small Grains,2025-05-15,2025-05-15
+  2026,20,203,Kansas,Wichita,Short Season Spring Small Grains,2026-05-15,2026-05-15
+
+Grazing periods longer than 366 days: 0
+
+County-years absent between two reporting years: 15
+  FSA published no grazing period for these; they are blank on the map.
+  State FSA Code,County FSA Code,FSA State Name,FSA County Name,Missing Year
+  05,025,Arkansas,Cleveland,2009
+  05,047,Arkansas,Franklin,2009
+  05,079,Arkansas,Lincoln,2009
+  05,113,Arkansas,Polk,2009
+  05,125,Arkansas,Saline,2009
+  10,001,Delaware,Kent,2009
+  10,001,Delaware,Kent,2010
+  10,003,Delaware,New Castle,2009
+  10,003,Delaware,New Castle,2010
+  10,005,Delaware,Sussex,2009
+  10,005,Delaware,Sussex,2010
+  16,079,Idaho,Shoshone,2016
+  51,037,Virginia,Charlotte,2009
+  51,037,Virginia,Charlotte,2010
+  51,037,Virginia,Charlotte,2011
+
+FSA counties reported under more than one name: 1
+  Collapsed to the alphabetically first name so the key stays unique.
+  State FSA Code,County FSA Code,FSA State Name,FSA County Name
+  29,510,Missouri,St. Louis
+  29,510,Missouri,"St. Louis, St. Louis City"
+

@@ -7,10 +7,3 @@
 .Rdata
 .httr-oauth
 .quarto
-
-# S3-hosted data (purged from git history 2026-07; archive of record:
-# https://data.sustainable-fsa.com/fsa-normal-grazing-period/)
-fsa-normal-grazing-period.fgb
-fsa-normal-grazing-period.csv
-fsa-normal-grazing-period.parquet
-qa-report.txt
