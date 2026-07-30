@@ -12,4 +12,5 @@
 # https://data.sustainable-fsa.com/fsa-normal-grazing-period/)
 fsa-normal-grazing-period.fgb
 fsa-normal-grazing-period.csv
+fsa-normal-grazing-period.parquet
 qa-report.txt

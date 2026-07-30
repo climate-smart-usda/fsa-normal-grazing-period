@@ -42,6 +42,8 @@ program year, or pasture type the other two lack.
 - [`fsa-normal-grazing-period.csv`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.csv)
   — cleaned and consolidated data, one record per program year, FSA
   county, and pasture type
+- [`fsa-normal-grazing-period.parquet`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.parquet)
+  — the same records as Parquet
 - [`qa-report.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/qa-report.txt)
   — validation summary and flagged records for the published data
 - [`fsa-normal-grazing-period.R`](./fsa-normal-grazing-period.R) —
@@ -55,10 +57,11 @@ program year, or pasture type the other two lack.
 
 ## ☁️ Archive Hosting & Automated Publishing
 
-The consolidated data (`fsa-normal-grazing-period.csv`), the QA report
-(`qa-report.txt`), the `assets/` directory the dashboard reads from, and
-the `foia/` correspondence are all mirrored to S3, served via CloudFront
-at <https://data.sustainable-fsa.com/fsa-normal-grazing-period/> (browse
+The consolidated data (`fsa-normal-grazing-period.csv` and
+`fsa-normal-grazing-period.parquet`), the QA report (`qa-report.txt`),
+the `assets/` directory the dashboard reads from, and the `foia/`
+correspondence are all mirrored to S3, served via CloudFront at
+<https://data.sustainable-fsa.com/fsa-normal-grazing-period/> (browse
 the [archive
 listing](https://data.sustainable-fsa.com/fsa-normal-grazing-period/) or
 [`_manifest.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/_manifest.txt)
@@ -209,11 +212,15 @@ published alongside the data:
 
 ## 📤 Output Data
 
-### `fsa-normal-grazing-period.csv`
+### `fsa-normal-grazing-period.csv` and `.parquet`
 
-The archive of record. One row per **program year, FSA county, and
-pasture type** — the grain FSA itself reports at. Uniquely keyed by
-`Program Year`, `State FSA Code`, `County FSA Code`, and `Pasture Type`.
+The archive of record, published in both formats with identical records.
+The Parquet carries column types; in the CSV the zero-padded FSA codes
+`01` and `001` must be read as character or they become `1`.
+
+One row per **program year, FSA county, and pasture type** — the grain
+FSA itself reports at. Uniquely keyed by `Program Year`,
+`State FSA Code`, `County FSA Code`, and `Pasture Type`.
 
 <table>
 <colgroup>
@@ -272,10 +279,7 @@ pasture type** — the grain FSA itself reports at. Uniquely keyed by
 </tbody>
 </table>
 
-`Pasture Type` takes 16 distinct values across the archive. The types
-above are logical, since CSV carries none of its own: **read both FSA
-code columns as character**, or a parser will turn `01` into `1` and
-drop the zero padding the codes depend on.
+`Pasture Type` takes 16 distinct values across the archive.
 
 Three things to know before using the data:
 
@@ -377,12 +381,10 @@ given their own offices.
 
 These halves often disagree. In Lucas County, OH, Forage Sorghum runs
 `04-15` → `10-30` in East Lucas but `05-01` → `07-31` in West Lucas —
-198 days against 91. A FIPS-keyed consumer therefore receives **several
-records per county per pasture type** and must decide how to treat them.
-Reducing them to the union (earliest start, latest end) would report 198
-days for both, overstating West Lucas by 107; the intersection is the
-interval both halves agree on. The archive picks neither, because the
-choice belongs to the analysis.
+198 days against 91. A join on FIPS therefore returns **several records
+per county per pasture type**. The archive reduces neither: the union of
+the two reports 198 days for both, and the intersection reports the
+interval they agree on.
 
 **The mapping depends on the program year.** FSA reorganised several
 counties between the two vintages, and six codes map to a different set

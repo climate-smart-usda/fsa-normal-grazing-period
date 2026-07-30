@@ -18,12 +18,8 @@ dir.create("assets",
            recursive = TRUE,
            showWarnings = FALSE)
 
-## The map draws FSA counties, which is the unit the archive is keyed on, so this
-## extract is a straight reshaping of the archive: no crosswalk join and no
-## reduction. Administratively split counties (East and West Lucas, OH; North and
-## South St. Louis, MN) render as the separate polygons FSA reports them as.
-##
-## County geometry comes from the FSA administrative boundary archives and is
+## A straight reshaping of the archive: no crosswalk join and no reduction, since
+## the map draws the FSA counties the archive is keyed on. County geometry is
 ## fetched by the browser at run time; see the `us` cell below.
 readr::read_csv("fsa-normal-grazing-period.csv") |>
   dplyr::transmute(
@@ -160,27 +156,15 @@ value: "duration_weeks"
 
 formatDate = d3.utcFormat("%b %d, %Y")
 
-// FSA county geometry, fetched from the FSA administrative boundary archives
-// rather than vendored here so it tracks those archives.
+// FSA county geometry, fetched from the boundary archives at run time so it tracks
+// them. The vintage follows the program year: eight FSA counties changed footprint
+// between dd17 and dd22 — Shoshone ID split out of Benewah and Kootenai, Sioux NE
+// consolidated into 31165, King WA into 53033, Richmond City VA out of Henrico — so
+// drawing an early year on dd22 leaves since-split territory blank.
 //
-// The vintage follows the program year, because FSA reorganised several counties
-// and a single vintage is wrong for the other era. Eight FSA counties changed
-// footprint between dd17 and dd22 — Shoshone ID split out of Benewah and
-// Kootenai, Sioux NE consolidated into 31165, King WA into 53033, Richmond City
-// VA out of Henrico — by as much as a factor of three. Drawing an early year on
-// dd22 leaves the territory of a since-split county blank even though its grazing
-// period was reported, under the office that then administered it.
-//
-// 2015 is the switchover because that is when 16079 (Shoshone) first appears in
-// the grazing period data, and from then on 16009, 16055, and 16079 all report,
-// which is only coherent under the dd22 arrangement. Only Idaho's reorganisation
-// can be dated this way: for Sioux, King, and Richmond both codes report in every
-// program year and their names never change, so the data gives no signal. The
-// vintage labels are no guide either — dd17 nominally holds 2017 definitions yet
-// lacks 16079, which the data already reports in 2015.
-//
-// Every FSA county the archive reports on resolves in its own era, except the
-// island territories, which neither boundary archive includes; those are not drawn.
+// 2015 is the switchover: 16079 (Shoshone) first appears in the data that year, and
+// from then on 16009, 16055 and 16079 all report, which only holds under the dd22
+// arrangement. The island territories are in neither archive and are not drawn.
 us = await d3.json(
   year <= 2014
     ? "https://data.sustainable-fsa.com/fsa-counties-dd17/fsa-counties-dd17.topojson"

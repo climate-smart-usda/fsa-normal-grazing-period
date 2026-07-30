@@ -25,6 +25,7 @@ The published archive is built from two of them: **2025-FSA-04691-F** (program y
 - [`foia/2026-FSA-02435-F Bocinsky.zip`](./foia/2026-FSA-02435-F Bocinsky.zip) — FOIA 2026-FSA-02435-F data and correspondence
 - [`foia/2026-FSA-03465-F Bocinsky.zip`](./foia/2026-FSA-03465-F%20Bocinsky.zip) — FOIA 2026-FSA-03465-F data and correspondence
 - [`fsa-normal-grazing-period.csv`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.csv) — cleaned and consolidated data, one record per program year, FSA county, and pasture type
+- [`fsa-normal-grazing-period.parquet`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.parquet) — the same records as Parquet
 - [`qa-report.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/qa-report.txt) — validation summary and flagged records for the published data
 - [`fsa-normal-grazing-period.R`](./fsa-normal-grazing-period.R) — processing script
 - [`fsa-normal-grazing-period.qmd`](./fsa-normal-grazing-period.qmd) — Quarto dashboard source
@@ -33,7 +34,7 @@ The published archive is built from two of them: **2025-FSA-04691-F** (program y
 
 ## ☁️ Archive Hosting & Automated Publishing
 
-The consolidated data (`fsa-normal-grazing-period.csv`), the QA report (`qa-report.txt`), the `assets/` directory the dashboard reads from, and the `foia/` correspondence are all mirrored to S3, served via CloudFront at <https://data.sustainable-fsa.com/fsa-normal-grazing-period/> (browse the [archive listing](https://data.sustainable-fsa.com/fsa-normal-grazing-period/) or [`_manifest.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/_manifest.txt) for a flat index). The interactive dashboard itself is served separately, via GitHub Pages at <https://sustainable-fsa.com/fsa-normal-grazing-period/>.
+The consolidated data (`fsa-normal-grazing-period.csv` and `fsa-normal-grazing-period.parquet`), the QA report (`qa-report.txt`), the `assets/` directory the dashboard reads from, and the `foia/` correspondence are all mirrored to S3, served via CloudFront at <https://data.sustainable-fsa.com/fsa-normal-grazing-period/> (browse the [archive listing](https://data.sustainable-fsa.com/fsa-normal-grazing-period/) or [`_manifest.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/_manifest.txt) for a flat index). The interactive dashboard itself is served separately, via GitHub Pages at <https://sustainable-fsa.com/fsa-normal-grazing-period/>.
 
 Publishing is handled by [`fsa-normal-grazing-period.R`](fsa-normal-grazing-period.R) via the shared [`R/s3-archive.R`](R/s3-archive.R) helpers, and runs automatically in GitHub Actions ([`.github/workflows/fsa-normal-grazing-period.yaml`](.github/workflows/fsa-normal-grazing-period.yaml)) whenever the script, dashboard, or workflow changes, or on manual dispatch. The workflow authenticates to AWS via GitHub OIDC (no long-lived credentials stored in the repo), re-renders the README and dashboard, and commits them back to git only if the rendered output changed.
 
@@ -126,9 +127,13 @@ published alongside the data:
 
 ## 📤 Output Data
 
-### `fsa-normal-grazing-period.csv`
+### `fsa-normal-grazing-period.csv` and `.parquet`
 
-The archive of record. One row per **program year, FSA county, and pasture type**
+The archive of record, published in both formats with identical records. The
+Parquet carries column types; in the CSV the zero-padded FSA codes `01` and `001`
+must be read as character or they become `1`.
+
+One row per **program year, FSA county, and pasture type**
 — the grain FSA itself reports at. Uniquely keyed by `Program Year`,
 `State FSA Code`, `County FSA Code`, and `Pasture Type`.
 
@@ -143,10 +148,7 @@ The archive of record. One row per **program year, FSA county, and pasture type*
 | `Grazing Period Start Date`   | date      | Start of the normal grazing period (`YYYY-MM-DD`)               |
 | `Grazing Period End Date`     | date      | End of the normal grazing period (`YYYY-MM-DD`)                 |
 
-`Pasture Type` takes 16 distinct values across the archive. The types above are
-logical, since CSV carries none of its own: **read both FSA code columns as
-character**, or a parser will turn `01` into `1` and drop the zero padding the
-codes depend on.
+`Pasture Type` takes 16 distinct values across the archive.
 
 Three things to know before using the data:
 
@@ -202,12 +204,10 @@ Under dd17 the list also includes Shoshone, ID (`16079`), Sioux, NE (`31165`), a
 King, WA (`53033`) — the three counties FSA has since given their own offices.
 
 These halves often disagree. In Lucas County, OH, Forage Sorghum runs `04-15` →
-`10-30` in East Lucas but `05-01` → `07-31` in West Lucas — 198 days against 91.
-A FIPS-keyed consumer therefore receives **several records per county per pasture
-type** and must decide how to treat them. Reducing them to the union (earliest
-start, latest end) would report 198 days for both, overstating West Lucas by 107;
-the intersection is the interval both halves agree on. The archive picks neither,
-because the choice belongs to the analysis.
+`10-30` in East Lucas but `05-01` → `07-31` in West Lucas — 198 days against 91. A
+join on FIPS therefore returns **several records per county per pasture type**. The
+archive reduces neither: the union of the two reports 198 days for both, and the
+intersection reports the interval they agree on.
 
 **The mapping depends on the program year.** FSA reorganised several counties
 between the two vintages, and six codes map to a different set of FIPS counties in

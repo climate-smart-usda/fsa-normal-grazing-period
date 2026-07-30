@@ -8,17 +8,8 @@ s3_preflight()
 s3_bucket <- Sys.getenv("S3_BUCKET", unset = "sustainable-fsa")
 s3_prefix <- Sys.getenv("S3_PREFIX", unset = "fsa-normal-grazing-period")
 
-# FSA's own county definitions, from the fsa-counties-dd22 archive, used to verify
-# that every FSA county the grazing period report names is a real one.
-#
-# dd22 is a strict superset of dd17 at the code level — 3115 codes against 3113,
-# adding only 16079 (Shoshone, ID) and 51760 (Richmond City, VA) — so it alone
-# covers every FSA county reported here. The vintages differ in what a code *means*
-# rather than which codes exist, which matters for drawing boundaries (see the
-# dashboard, which picks its vintage by program year) but not for this check.
-#
-# Only the two code columns are read; the CDN honours range requests, so the
-# geometry in this geoparquet is not transferred.
+# FSA's published county definitions, to check every FSA county in the report is a
+# real one. Reads the code columns only, so the geometry is not transferred.
 fsa_counties <-
   arrow::read_parquet(
     "https://data.sustainable-fsa.com/fsa-counties-dd22/fsa-counties-dd22.parquet",
@@ -49,13 +40,8 @@ extract_member <- function(zipfile, file, exdir = tempdir()) {
   path
 }
 
-# FSA-defined Normal Grazing Periods.
-#
-# The archive is keyed on the FSA county, which is the grain FSA reports at:
-# (Program Year, State FSA Code, County FSA Code, Pasture Type). No aggregation
-# is applied. Consumers needing Census geography join the fsa-counties-dd17 or
-# fsa-counties-dd22 archive, choosing the vintage matching the program year: the
-# relation is many-to-many, and six FSA codes are redefined between the vintages.
+# FSA-defined Normal Grazing Periods, keyed on (Program Year, State FSA Code,
+# County FSA Code, Pasture Type) — the grain FSA reports at. No aggregation.
 fsa_normal_grazing_period <-
   extract_member("foia/2025-FSA-04691-F Bocinsky.zip",
                  "LFP_NormalGrazingPeriodsReport20250416.xlsx") %>%
@@ -83,11 +69,8 @@ fsa_normal_grazing_period <-
     `Grazing Period End Date` = lubridate::as_date(`Normal Grazing Period End Date`)
   )
 
-# FSA sometimes reports one county under more than one name, leaving records that
-# differ only in the name and so survive de-duplication. Missouri 29510 is the
-# only instance, appearing as both "St. Louis" and "St. Louis, St. Louis City"
-# with identical dates. Captured for the QA report so the canonicalization below
-# is visible rather than silent.
+# FSA reports Missouri 29510 as both "St. Louis" and "St. Louis, St. Louis City"
+# with identical dates. Recorded for the QA report, then canonicalized below.
 qa_name_variants <-
   fsa_normal_grazing_period %>%
   dplyr::distinct(`State FSA Code`, `County FSA Code`,
@@ -98,19 +81,13 @@ qa_name_variants <-
 
 fsa_normal_grazing_period <-
   fsa_normal_grazing_period %>%
-  # Collapse those variants to one name per FSA county, taking the
-  # alphabetically first — the form dd17, dd22, and the Census all use for 29510
-  # ("St. Louis").
+  # One name per FSA county, alphabetically first.
   dplyr::mutate(
     `FSA State Name` = min(`FSA State Name`),
     `FSA County Name` = min(`FSA County Name`),
     .by = c(`State FSA Code`, `County FSA Code`)
   ) %>%
   dplyr::mutate(
-
-    # FSA codes are recorded as reported, including county 46113, which FSA still
-    # reports under its historical name, Shannon, though the Census county it
-    # covers is now Oglala Lakota (FIPS 46102).
 
     # Correct name of "Full Season Improved Mixed Pasture" in certain records
     `Pasture Type` = 
@@ -119,27 +96,22 @@ fsa_normal_grazing_period <-
         "Full Season Improved Mixed Pastures" ~ 
           "Full Season Improved Mixed Pasture"),
     
-    # Corrections to erroneous dates in the FOIA source data.
-    #
-    # Every arm MUST be scoped to the pasture type(s) it names. Scoping a
-    # correction to `Program Year` + state alone rewrites every pasture type in
-    # that state-year, and the winter forage types legitimately begin in the
-    # prior calendar year, so a blanket start-date rewrite inverts them.
+    # Corrections to erroneous dates in the FOIA source. Each arm must be scoped
+    # to the pasture type(s) it names: scoping to program year and state alone
+    # inverts the winter forage types, which begin in the prior calendar year.
     `Grazing Period Start Date` =
       case_when(
-        # Native Pasture in Piute and Sevier counties, UT carries a start
-        # date one year early (2009-04-01 → 2010-12-01, a 20-month period).
-        # Surrounding counties begin 2010-04-01.
+        # Native Pasture in Piute and Sevier, UT starts a year early
+        # (2009-04-01 → 2010-12-01). Surrounding counties begin 2010-04-01.
         `Program Year` == 2010 &
           `State FSA Code` == "49" &
           `County FSA Code` %in% c("031", "041") &
           `Pasture Type` == "Native Pasture" ~
           lubridate::as_date("2010-04-01"),
 
-        # Three 2026 South Dakota records transpose the start year 2026 as 2006
-        # while the end date remains in 2026. Each replacement is the modal
-        # value among the 62–65 other South Dakota counties reporting the same
-        # pasture type in the same program year.
+        # Three 2026 South Dakota records give the start year as 2006, with the
+        # end date in 2026. Replacements are the modal value among the other
+        # South Dakota counties for the same pasture type and program year.
         `Program Year` == 2026 &
           `State FSA Code` == "46" &
           `County FSA Code` == "003" &
@@ -158,9 +130,9 @@ fsa_normal_grazing_period <-
           `Pasture Type` == "Full Season Improved Mixed Pasture" ~
           lubridate::as_date("2026-07-15"),
 
-        # Mississippi Annual Ryegrass is reported one full year early in 2013
-        # only (2011-12-01 → 2012-05-31). Program years 2012 and 2014–2024 all
-        # run from 01 December of the prior year into the program year itself.
+        # Mississippi Annual Ryegrass is a year early in 2013 only
+        # (2011-12-01 → 2012-05-31). Other years run 01 December of the prior
+        # year into the program year.
         `Program Year` == 2013 &
           `State FSA Code` == "28" &
           `Pasture Type` == "Annual Ryegrass" ~
@@ -177,10 +149,9 @@ fsa_normal_grazing_period <-
           `Pasture Type` == "Annual Ryegrass" ~
           lubridate::as_date("2013-05-31"),
 
-        # Six West Virginia counties report a 2027 end year against a 2026
-        # program year and a 2026-04-15 start, describing a 19-month period.
-        # The year is corrected to 2026; FSA moved the end date itself, from
-        # 10-31 in 2025 to 11-15, so 11-15 is kept as reported.
+        # Six West Virginia counties give a 2027 end year against a 2026 program
+        # year and a 2026-04-15 start. Only the year is corrected: FSA moved the
+        # end date from 10-31 in 2025 to 11-15, so 11-15 stands.
         `Program Year` == 2026 &
           `State FSA Code` == "54" &
           `County FSA Code` %in% c("031", "071", "075", "077", "083", "093") &
@@ -191,11 +162,8 @@ fsa_normal_grazing_period <-
       )
   ) %>%
   dplyr::filter(!is.na(`Pasture Type`)) %>%
-  # Removes 371 rows, every one an exact repeat of another by this point: 7 were
-  # already identical in the source, 334 became identical once the two spellings
-  # of "Full Season Improved Mixed Pasture" were standardised above, and 30 once
-  # the 29510 county-name variants were canonicalised. The uniqueness invariant
-  # below confirms that no records differing in their dates are collapsed here.
+  # Removes 371 exact repeats: 7 identical in the source, the rest identical once
+  # the pasture-type spelling and the 29510 name were standardized above.
   dplyr::distinct() %>%
   dplyr::arrange(`Program Year`, `State FSA Code`, `County FSA Code`,
                  `Pasture Type`)
@@ -204,19 +172,12 @@ fsa_normal_grazing_period <-
 ## ---------------------------------------------------------------------------
 ## Validation
 ##
-## Two classes of check:
-##
-##   * Invariants abort the run, before `write_csv()`, so a bad archive reaches
-##     neither the git mirror nor S3. A duplicated key, an end date preceding its
-##     start date, or a missing field indicates a processing fault rather than a
-##     property of the source: the raw workbooks contain no inverted periods.
-##
-##   * Outliers are reported, not fatal. Dates outside the program-year window
-##     and zero-length periods do occur in the source data, so a new FOIA
-##     release can introduce one without blocking publication.
+## Invariants abort before write_csv(), so a bad archive reaches neither git nor
+## S3. Outliers are reported instead: they occur in the source, and a new FOIA
+## release can introduce one without blocking publication.
 ## ---------------------------------------------------------------------------
 
-# Fail with the offending count and a sample, so a CI log alone identifies the cause.
+# Fail with the count and a sample, so a CI log alone identifies the cause.
 assert_empty <- function(offenders, what) {
   if (nrow(offenders) == 0L) {
     return(invisible(NULL))
@@ -237,10 +198,8 @@ assert_empty(
   "duplicate (Program Year, FSA county, Pasture Type) keys"
 )
 
-# An FSA county code the grazing period report names but FSA's county definitions
-# do not is either a typo in the source or a code we cannot place, and it would be
-# unmappable and unjoinable. Catching it needs the external list, which is the one
-# thing this script fetches beyond the FOIA workbooks.
+# An FSA code the report names but FSA's definitions do not is unmappable and
+# unjoinable. The only external list the script fetches beyond the FOIA workbooks.
 assert_empty(
   fsa_normal_grazing_period %>%
     dplyr::distinct(`State FSA Code`, `County FSA Code`, `FSA State Name`,
@@ -277,22 +236,16 @@ qa_zero_length <-
   fsa_normal_grazing_period %>%
   dplyr::filter(`Grazing Period End Date` == `Grazing Period Start Date`)
 
-# A normal grazing period cannot exceed a year. The window check above tolerates
-# an end date in the year following the program year, which a period genuinely
-# spanning a winter needs, so a wrong year in the end date can slip past it —
-# duration catches that case directly.
+# A grazing period cannot exceed a year. The window check tolerates an end date in
+# the following year, which winter periods need, so a wrong end year can pass it.
 qa_duration <-
   fsa_normal_grazing_period %>%
   dplyr::filter(as.integer(`Grazing Period End Date` -
                              `Grazing Period Start Date`) > 366L)
 
-# County-years FSA did not publish. A year unreported *within* a county's span of
-# reporting years is a hole, as distinct from that county simply starting or ending
-# its reporting. Ten counties have one, 15 county-years in total, nearly all in
-# 2009–2011: five Arkansas counties for 2009, all three Delaware counties for
-# 2009–2010, Charlotte VA for 2009–2011, and Shoshone ID for 2016. Reported so a
-# county left blank on the map can be traced to a gap in the source rather than
-# read as a rendering fault.
+# Years unreported within a county's own span of reporting years. Ten counties, 15
+# county-years, mostly 2009–2011: five Arkansas counties, all three Delaware
+# counties, Charlotte VA, and Shoshone ID in 2016.
 qa_missing_county_years <-
   fsa_normal_grazing_period %>%
   dplyr::distinct(`State FSA Code`, `County FSA Code`, `FSA State Name`,
@@ -305,8 +258,8 @@ qa_missing_county_years <-
   ) %>%
   dplyr::arrange(`State FSA Code`, `County FSA Code`, `Missing Year`)
 
-# Render a detail table as indented CSV. A tibble's own print wraps wide frames
-# across several blocks, which makes the report unreadable and ungreppable.
+# Detail tables as indented CSV; a tibble's print wraps wide frames across
+# several blocks.
 qa_detail <- function(x) {
   if (nrow(x) == 0L) {
     return(character(0))
@@ -370,7 +323,15 @@ if (nrow(qa_window) + nrow(qa_zero_length) + nrow(qa_duration) +
           call. = FALSE)
 }
 
+# Mirrored CSV and Parquet, identical records. CSV carries no types, so codes like
+# "01" read back as 1; Parquet keeps them character and dates as dates.
 readr::write_csv(fsa_normal_grazing_period, "fsa-normal-grazing-period.csv")
+arrow::write_parquet(fsa_normal_grazing_period,
+                     sink = "fsa-normal-grazing-period.parquet",
+                     version = "latest",
+                     compression = "zstd",
+                     compression_level = 13,
+                     use_dictionary = TRUE)
 
 ## Render the interactive dashboard
 quarto::quarto_render("fsa-normal-grazing-period.qmd")
@@ -383,6 +344,11 @@ s3_put(bucket = s3_bucket,
        key = paste0(s3_prefix, "/fsa-normal-grazing-period.csv"),
        file = "fsa-normal-grazing-period.csv",
        content_type = "text/csv")
+
+s3_put(bucket = s3_bucket,
+       key = paste0(s3_prefix, "/fsa-normal-grazing-period.parquet"),
+       file = "fsa-normal-grazing-period.parquet",
+       content_type = "application/vnd.apache.parquet")
 
 s3_put(bucket = s3_bucket,
        key = paste0(s3_prefix, "/qa-report.txt"),
@@ -405,6 +371,7 @@ s3_write_manifest(bucket = s3_bucket,
 cf_invalidate(
   paths = c(
     paste0("/", s3_prefix, "/fsa-normal-grazing-period.csv"),
+    paste0("/", s3_prefix, "/fsa-normal-grazing-period.parquet"),
     paste0("/", s3_prefix, "/qa-report.txt"),
     paste0("/", s3_prefix, "/_manifest.txt")
   )
