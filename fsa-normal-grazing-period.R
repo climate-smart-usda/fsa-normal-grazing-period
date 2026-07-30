@@ -269,7 +269,6 @@ qa_detail <- function(x) {
 
 qa_report <- c(
   "FSA Normal Grazing Period archive — QA report",
-  paste0("Generated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
   "",
   "Grain: one record per program year, FSA county, and pasture type — the grain",
   "FSA reports at. No aggregation is applied. For Census geography, join the",
