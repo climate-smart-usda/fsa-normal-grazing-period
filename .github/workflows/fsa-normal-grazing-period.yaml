@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: mt-climate-office/actions/setup-geospatial@v1
         with:
-          extra-r-packages: quarto readxl khroma ragg
+          extra-r-packages: quarto readxl khroma ragg arrow
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2

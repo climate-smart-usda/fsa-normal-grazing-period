@@ -22,9 +22,14 @@ due to drought.
 
 The data in this repository were acquired via FOIA requests
 **2025-FSA-04691-F**, **2026-FSA-02435-F**, and **2026-FSA-03465-F** by
-R. Kyle Bocinsky (Montana Climate Office). The FOIA requests and
-responses, including the original Excel workbook, is archived in the
-[`foia`](./foia) directory.
+R. Kyle Bocinsky (Montana Climate Office). All three requests and their
+responses are archived in the [`foia`](./foia) directory.
+
+The published archive is built from two of them: **2025-FSA-04691-F**
+(program years 2008–2025) and **2026-FSA-03465-F** (2025–2026).
+**2026-FSA-02435-F** is retained for provenance but is not read by the
+processing script — it covers 2008–2025 and contributes no county,
+program year, or pasture type the other two lack.
 
 ## 🗂️ Contents
 
@@ -35,7 +40,10 @@ responses, including the original Excel workbook, is archived in the
 - [`foia/2026-FSA-03465-F Bocinsky.zip`](./foia/2026-FSA-03465-F%20Bocinsky.zip)
   — FOIA 2026-FSA-03465-F data and correspondence
 - [`fsa-normal-grazing-period.csv`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.csv)
-  — cleaned and consolidated data
+  — cleaned and consolidated data, one record per program year, FSA
+  county, and pasture type
+- [`qa-report.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/qa-report.txt)
+  — validation summary and flagged records for the published data
 - [`fsa-normal-grazing-period.R`](./fsa-normal-grazing-period.R) —
   processing script
 - [`fsa-normal-grazing-period.qmd`](./fsa-normal-grazing-period.qmd) —
@@ -47,10 +55,10 @@ responses, including the original Excel workbook, is archived in the
 
 ## ☁️ Archive Hosting & Automated Publishing
 
-The consolidated data (`fsa-normal-grazing-period.csv`), the `assets/`
-directory the dashboard reads from, and the `foia/` correspondence are
-all mirrored to S3, served via CloudFront at
-<https://data.sustainable-fsa.com/fsa-normal-grazing-period/> (browse
+The consolidated data (`fsa-normal-grazing-period.csv`), the QA report
+(`qa-report.txt`), the `assets/` directory the dashboard reads from, and
+the `foia/` correspondence are all mirrored to S3, served via CloudFront
+at <https://data.sustainable-fsa.com/fsa-normal-grazing-period/> (browse
 the [archive
 listing](https://data.sustainable-fsa.com/fsa-normal-grazing-period/) or
 [`_manifest.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/_manifest.txt)
@@ -73,15 +81,15 @@ changed.
 
 ## 📥 Input Data: FOIA Excel Workbook
 
-The FOIA response contains annual NGP data from **2008 through 2026**
+The FOIA responses contain annual NGP data from **2008 through 2026**
 for each pasture type, county, and program year.
 
 ### Key Variables
 
 <table>
 <colgroup>
-<col style="width: 40%" />
-<col style="width: 59%" />
+<col style="width: 42%" />
+<col style="width: 57%" />
 </colgroup>
 <thead>
 <tr>
@@ -125,6 +133,16 @@ for each pasture type, county, and program year.
 </tbody>
 </table>
 
+The columns above are those of the 2025-FSA-04691-F workbook. The
+2026-FSA-03465-F workbook carries the same eight fields in the same
+order but names them in snake_case (`program_year`, `state_fsa_code`, …,
+and `pasture_grazing_type_description`), and reports FSA codes without
+zero padding. The processing script pads those codes and aligns the
+names positionally.
+
+Roughly 33,000 rows across the two workbooks have no start or end date;
+these are dropped. No row has one date without the other.
+
 ------------------------------------------------------------------------
 
 ## 🧹 Processing Workflow
@@ -132,83 +150,277 @@ for each pasture type, county, and program year.
 The processing script
 [`fsa-normal-grazing-period.R`](./fsa-normal-grazing-period.R):
 
-1.  **Unzips and reads** the Excel workbook.
+1.  **Unzips and reads** the FOIA Excel workbooks.
 2.  **Filters records** with missing dates.
-3.  **Constructs an `FSA Code`** by concatenating state and county FSA
-    codes.
-4.  **Cleans and standardizes** pasture type names.
-5.  **Corrects known data errors**, including:
-
-- Erroneous years and dates in KS, UT, MS, and MT records.
-- Handling duplicate and misassigned counties (e.g., Shoshone County,
-  ID).
-
-1.  **Removes invalid or duplicate entries**.
-2.  **Exports** the cleaned data to
+3.  **Cleans and standardizes** pasture type names.
+4.  **Canonicalizes FSA county names** where FSA reports one county
+    under more than one name, so the record key stays unique. Missouri
+    29510 is the only current instance, appearing as both `St. Louis`
+    and `St. Louis, St. Louis City`.
+5.  **Corrects known errors in the FOIA source data.** Each correction
+    is scoped to the specific county, program year, and pasture type it
+    applies to:
+    - Native Pasture in Piute and Sevier counties, UT (2010) — start
+      date reported one year early (2009 rather than 2010).
+    - Three South Dakota counties (2026) — start year reported as 2006.
+    - Mississippi Annual Ryegrass (2013) — period reported one year
+      early.
+    - Six West Virginia counties (2026) — end year reported as 2027,
+      describing a 19-month grazing period. Only the year is corrected;
+      the reported month and day stand.
+6.  **De-duplicates**, removing 371 rows that are exact repeats of
+    another by this point: 7 were already identical in the source, 334
+    became identical once the two spellings of *Full Season Improved
+    Mixed Pasture* were standardized in step 3, and 30 once the
+    county-name variants were canonicalized in step 4. No record
+    differing in its dates is ever merged with another.
+7.  **Validates** the result (see below) and writes a QA report.
+8.  **Exports**
     [`fsa-normal-grazing-period.csv`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.csv).
-3.  **Renders** an interactive Quarto dashboard.
+9.  **Renders** an interactive Quarto dashboard.
+
+There is **no aggregation step**. The archive is keyed on the FSA county
+and preserves every record FSA reports; see *Relating FSA counties to
+Census counties* below for how to relate it to Census geography.
+
+### ✅ Validation
+
+The script enforces four invariants and aborts before writing anything
+if any of them fails, so a defect cannot reach the published archive:
+
+- exactly one record per program year, FSA county, and pasture type;
+- every grazing period ends on or after it starts;
+- no missing values in any published field;
+- every FSA county resolves against FSA’s published county definitions.
+
+A further set of conditions is *reported* rather than treated as fatal,
+since a new FOIA release may legitimately introduce one. These are
+written to
+[`qa-report.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/qa-report.txt),
+published alongside the data:
+
+- dates falling outside the program year ± 1 window;
+- zero-length grazing periods;
+- grazing periods longer than 366 days;
+- county-years absent between two reporting years;
+- FSA counties reported under more than one name.
 
 ------------------------------------------------------------------------
 
-## 📤 Output Data: Cleaned CSV
+## 📤 Output Data
 
-The file
-[`fsa-normal-grazing-period.csv`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.csv)
-is a tidy dataset for analysis and visualization.
+### `fsa-normal-grazing-period.csv`
 
-### Variables in Output
+The archive of record. One row per **program year, FSA county, and
+pasture type** — the grain FSA itself reports at. Uniquely keyed by
+`Program Year`, `State FSA Code`, `County FSA Code`, and `Pasture Type`.
 
 <table>
 <colgroup>
-<col style="width: 40%" />
-<col style="width: 59%" />
+<col style="width: 28%" />
+<col style="width: 10%" />
+<col style="width: 60%" />
 </colgroup>
 <thead>
 <tr>
 <th>Variable Name</th>
+<th>Type</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td><code>Program Year</code></td>
-<td>Year the data applies to</td>
-</tr>
-<tr>
-<td><code>State Name</code></td>
-<td>Full U.S. state name</td>
-</tr>
-<tr>
-<td><code>County Name</code></td>
-<td>County or county-equivalent name</td>
+<td>integer</td>
+<td>LFP program year the record applies to (2008–2026)</td>
 </tr>
 <tr>
 <td><code>State FSA Code</code></td>
-<td>FSA state code (not always ANSI/FIPS)</td>
+<td>character</td>
+<td>Two-digit zero-padded FSA state code (e.g. <code>01</code>)</td>
 </tr>
 <tr>
 <td><code>County FSA Code</code></td>
-<td>FSA county code (not always ANSI/FIPS)</td>
+<td>character</td>
+<td>Three-digit zero-padded FSA county code (e.g. <code>001</code>)</td>
 </tr>
 <tr>
-<td><code>FSA Code</code></td>
-<td>Combined <code>State FSA Code</code> +
-<code>County FSA Code</code></td>
+<td><code>FSA State Name</code></td>
+<td>character</td>
+<td>State or territory name, as reported by FSA</td>
+</tr>
+<tr>
+<td><code>FSA County Name</code></td>
+<td>character</td>
+<td>FSA county (service area) name, as reported by FSA</td>
 </tr>
 <tr>
 <td><code>Pasture Type</code></td>
-<td>Standardized pasture type</td>
+<td>character</td>
+<td>Standardized pasture or forage classification</td>
 </tr>
 <tr>
-<td><code>Normal Grazing Period Start Date</code></td>
-<td>Cleaned and corrected start date</td>
+<td><code>Grazing Period Start Date</code></td>
+<td>date</td>
+<td>Start of the normal grazing period (<code>YYYY-MM-DD</code>)</td>
 </tr>
 <tr>
-<td><code>Normal Grazing Period End Date</code></td>
-<td>Cleaned and corrected end date</td>
+<td><code>Grazing Period End Date</code></td>
+<td>date</td>
+<td>End of the normal grazing period (<code>YYYY-MM-DD</code>)</td>
 </tr>
 </tbody>
 </table>
+
+`Pasture Type` takes 16 distinct values across the archive. The types
+above are logical, since CSV carries none of its own: **read both FSA
+code columns as character**, or a parser will turn `01` into `1` and
+drop the zero padding the codes depend on.
+
+Three things to know before using the data:
+
+- A grazing period may begin in the calendar year *preceding* its
+  program year — winter forage types such as Long Season Small Grains
+  routinely do — so `Grazing Period Start Date` should never be assumed
+  to fall within `Program Year`.
+- **FSA codes are not FIPS codes.** They coincide for most counties, but
+  150 of the 3,095 FSA counties here carry a code that is not the FIPS
+  code of the county they cover, so resolve them through the FSA county
+  definitions rather than treating one as the other. See *Relating FSA
+  counties to Census counties* below.
+- **A county absent from a program year is not necessarily an error.**
+  FSA did not publish a grazing period for every county in every year;
+  15 county-years are missing inside a county’s own span of reporting,
+  and are listed in
+  [`qa-report.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/qa-report.txt).
+
+## 🗺️ Relating FSA counties to Census counties
+
+The archive is keyed on the FSA county. If you need Census (FIPS)
+geography, take the mapping from the FSA administrative boundary
+archives, which are the authority on it:
+
+🔗
+[**fsa-counties-dd17**](https://data.sustainable-fsa.com/fsa-counties-dd17/)
+· 🔗
+[**fsa-counties-dd22**](https://data.sustainable-fsa.com/fsa-counties-dd22/)
+
+Their geoparquets carry one row per FSA-to-FIPS pair, so reading
+`FSA_ST`, `FSA_STCOU`, `FIPSST`, and `FIPSCO` gives you the crosswalk
+directly. Three things to know before joining.
+
+**The relation is many-to-many in both directions.** One FSA county may
+cover several FIPS counties — 38 do in dd22. FSA runs four offices for
+all of Alaska, so FSA `02005` (Palmer) alone spans 14 census areas, and
+Puerto Rico’s `72025` (Caguas) spans 23 municipios. Joining *replicates*
+such a record across every FIPS county it covers, the same reported
+grazing period appearing in all 23.
+
+**Several FSA counties may fall inside one FIPS county**, because FSA
+splits some counties administratively and each half sets its own grazing
+period. Nine do under dd22, twelve under dd17:
+
+<table>
+<colgroup>
+<col style="width: 35%" />
+<col style="width: 64%" />
+</colgroup>
+<thead>
+<tr>
+<th>FIPS county</th>
+<th>FSA counties (dd22)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Aroostook, ME (<code>23003</code>)</td>
+<td>Aroostook · Fort Kent · Houlton</td>
+</tr>
+<tr>
+<td>Custer, ID (<code>16037</code>)</td>
+<td>Lemhi, North Custer · South Custer</td>
+</tr>
+<tr>
+<td>Pottawattamie, IA (<code>19155</code>)</td>
+<td>East Pottawattamie · West Pottawattamie</td>
+</tr>
+<tr>
+<td>Otter Tail, MN (<code>27111</code>)</td>
+<td>East Otter Tail · West Otter Tail</td>
+</tr>
+<tr>
+<td>Polk, MN (<code>27119</code>)</td>
+<td>East Polk · West Polk</td>
+</tr>
+<tr>
+<td>St. Louis, MN (<code>27137</code>)</td>
+<td>North St. Louis · South St. Louis</td>
+</tr>
+<tr>
+<td>Nye, NV (<code>32023</code>)</td>
+<td>Northwest Nye · Southeast Nye</td>
+</tr>
+<tr>
+<td>Lucas, OH (<code>39095</code>)</td>
+<td>East Lucas · West Lucas</td>
+</tr>
+<tr>
+<td>Galax, VA (<code>51640</code>)</td>
+<td>Carroll, East Galax City · Grayson, West Galax City</td>
+</tr>
+</tbody>
+</table>
+
+Under dd17 the list also includes Shoshone, ID (`16079`), Sioux, NE
+(`31165`), and King, WA (`53033`) — the three counties FSA has since
+given their own offices.
+
+These halves often disagree. In Lucas County, OH, Forage Sorghum runs
+`04-15` → `10-30` in East Lucas but `05-01` → `07-31` in West Lucas —
+198 days against 91. A FIPS-keyed consumer therefore receives **several
+records per county per pasture type** and must decide how to treat them.
+Reducing them to the union (earliest start, latest end) would report 198
+days for both, overstating West Lucas by 107; the intersection is the
+interval both halves agree on. The archive picks neither, because the
+choice belongs to the analysis.
+
+**The mapping depends on the program year.** FSA reorganised several
+counties between the two vintages, and six codes map to a different set
+of FIPS counties in each — for example `16009` covers Benewah *and*
+Shoshone in dd17 but Benewah alone in dd22, once Shoshone became
+`16079`. Choose the vintage that matches the program year you are
+working with: dd17 for 2008–2014, dd22 for 2015 onward.
+
+``` r
+library(dplyr)
+library(arrow)
+library(readr)
+
+ngp <- read_csv("https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.csv")
+
+# The crosswalk, from the boundary archive matching your program years. Only the
+# code columns are read, so the geometry is not transferred.
+xwalk <-
+  read_parquet(
+    "https://data.sustainable-fsa.com/fsa-counties-dd22/fsa-counties-dd22.parquet",
+    col_select = c("FSA_ST", "FSA_STCOU", "FIPSST", "FIPSCO")
+  ) |>
+  transmute(
+    `State FSA Code` = FSA_ST,
+    `County FSA Code` = substr(FSA_STCOU, 3, 5),
+    FIPS = paste0(FIPSST, FIPSCO)
+  ) |>
+  distinct()
+
+# `relationship` is explicit because the join genuinely is many-to-many;
+# leaving it implicit hides the fan-out.
+ngp_fips <-
+  ngp |>
+  filter(`Program Year` >= 2015) |>
+  inner_join(xwalk,
+             by = c("State FSA Code", "County FSA Code"),
+             relationship = "many-to-many")
+```
 
 ------------------------------------------------------------------------
 
@@ -223,34 +435,65 @@ provides:
 - Visual summaries of **seasonality and regional variation**
 - A **tool for researchers and policymakers** to assess temporal trends
 
+The map draws FSA counties, so it shows the archive without reduction —
+administratively split counties such as East and West Lucas, OH appear
+as the separate polygons FSA reports them as.
+
+County boundaries are fetched at run time from the FSA administrative
+boundary archives, and **the vintage follows the program year**:
+[`fsa-counties-dd17`](https://data.sustainable-fsa.com/fsa-counties-dd17/)
+for 2008–2014 and
+[`fsa-counties-dd22`](https://data.sustainable-fsa.com/fsa-counties-dd22/)
+for 2015 onward. FSA reorganised several counties between the two
+vintages — most visibly Shoshone County, ID, which was split out of the
+Benewah and Kootenai offices — so each year is drawn on the boundaries
+that were in force for it. Drawing an early year on current boundaries
+would leave the territory of a since-split county blank even though its
+grazing period was reported, under the office that then administered it.
+
+A county with no colour means one of two things:
+
+- **No polygon.** The island territories are not drawn; neither boundary
+  archive includes them. Their grazing periods are still in the data.
+- **No reported grazing period** for that county and year. Ten FSA
+  counties have a year missing inside their reporting span, 15
+  county-years in all — mostly 2009–2011, plus Shoshone County, ID
+  in 2016. Every one is listed in
+  [`qa-report.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/qa-report.txt).
+
 <iframe src="fsa-normal-grazing-period.html" frameborder="0" allowfullscreen style="width:100%;height:40vw;">
 </iframe>
 
 Access a full-screen version of the dashboard at:  
-<https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.html>
+<https://sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.html>
 
 ------------------------------------------------------------------------
 
 ## 📍 Quick Start: Visualize a Normal Grazing Period Map in R
 
-This snippet shows how to load the Normal Grazing Period file from the
-archive and create a simple map using `sf` and `ggplot2`.
+This snippet maps the archive using `sf` and `ggplot2`. It reads the
+data file this build just produced; substitute the published URL from
+[Contents](#🗂️-contents) to run it yourself.
+
+The map draws **FSA counties**, which is the unit the archive is keyed
+on, so no crosswalk and no reduction are needed. Boundaries come from
+the FSA administrative boundary archives.
 
 ``` r
 # Load required libraries
 library(sf)
 library(ggplot2) # For plotting
-library(tigris)  # For state boundaries
 library(rmapshaper) # For innerlines function
 
 ## Get the Normal Grazing Period data
-ngp <- 
-  readr::read_csv("https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.csv")
+ngp <- readr::read_csv("fsa-normal-grazing-period.csv")
 
-## The Normal Grazing Period data files use Census county definitions
-counties <- 
-  sf::read_sf("assets/us-census-counties.topojson",
-              layer = "counties") |>
+## FSA county boundaries, already simplified and with Alaska and Hawaii inset
+counties <-
+  sf::read_sf(
+    "/vsicurl/https://data.sustainable-fsa.com/fsa-counties-dd22/fsa-counties-dd22.topojson",
+    layer = "counties"
+  ) |>
   sf::st_set_crs("EPSG:4326") |>
   sf::st_transform("EPSG:5070")
 
@@ -261,9 +504,9 @@ ngp_counties <-
   dplyr::filter(`Pasture Type` == "Native Pasture",
                 `Program Year` == 2026) |>
   dplyr::transmute(
-    id = paste0(`FIPS State Code`, `FIPS County Code`),
-    `Grazing Period Duration` = 
-      
+    id = paste0(`State FSA Code`, `County FSA Code`),
+    `Grazing Period Duration` =
+
         (`Grazing Period End Date` - `Grazing Period Start Date`) |>
       magrittr::divide_by(7) |>
       as.integer()
@@ -303,13 +546,27 @@ ggplot(counties) +
 
 ## 🧭 About FSA County Codes
 
-The USDA FSA uses custom county definitions that differ from standard
-ANSI/FIPS codes used by the U.S. Census. To align the Normal Grazing
-Period data with geographic boundaries, we use the FSA-specific
-geospatial dataset archived in the companion repository:
+The USDA FSA uses custom county definitions that differ from the
+standard ANSI/FIPS codes used by the U.S. Census. FSA administers some
+Census counties as two or three separate service areas, and elsewhere
+administers many Census counties from a single one — so an FSA county is
+not a Census county, even where the two share a code. This archive is
+keyed on the FSA county because that is the unit FSA reports Normal
+Grazing Periods for.
+
+The authoritative FSA county definitions, including the FIPS crosswalk,
+are archived in the companion repositories:
 
 🔗
 [**sustainable-fsa/fsa-counties-dd17**](https://sustainable-fsa.com/fsa-counties-dd17/)
+— FSA county definitions, dd17 vintage 🔗
+[**sustainable-fsa/fsa-counties-dd22**](https://sustainable-fsa.com/fsa-counties-dd22/)
+— FSA county definitions, dd22 vintage
+
+This archive publishes no crosswalk of its own. See *Relating FSA
+counties to Census counties* above for how to take the mapping from
+those archives, and why the vintage you choose depends on the program
+year.
 
 FSA county codes are documented in [FSA Handbook 1-CM, Exhibit
 101](https://www.fsa.usda.gov/Internet/FSA_File/1-cm_r03_a80.pdf).

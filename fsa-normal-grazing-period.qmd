@@ -8,22 +8,26 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r create-topojson}
+```{r create-dashboard-data}
 #| echo: false     # hides the code
 #| results: "hide" # hides printed output
 #| message: false  # hides messages (e.g. from package loading)
 #| warning: false  # hides warnings
 
-library(sf)
-library(rmapshaper)
-
 dir.create("assets",
            recursive = TRUE,
            showWarnings = FALSE)
 
+## The map draws FSA counties, which is the unit the archive is keyed on, so this
+## extract is a straight reshaping of the archive: no crosswalk join and no
+## reduction. Administratively split counties (East and West Lucas, OH; North and
+## South St. Louis, MN) render as the separate polygons FSA reports them as.
+##
+## County geometry comes from the FSA administrative boundary archives and is
+## fetched by the browser at run time; see the `us` cell below.
 readr::read_csv("fsa-normal-grazing-period.csv") |>
   dplyr::transmute(
-    id = paste0(`FIPS State Code`, `FIPS County Code`),
+    id = paste0(`State FSA Code`, `County FSA Code`),
     year = `Program Year`,
     type = `Pasture Type`,
     start_date = `Grazing Period Start Date`,
@@ -32,76 +36,10 @@ readr::read_csv("fsa-normal-grazing-period.csv") |>
     end_yday = lubridate::yday(`Grazing Period End Date`),
     duration_weeks =
       as.integer((`Grazing Period End Date` - `Grazing Period Start Date`) / 7)) |>
+  dplyr::arrange(id, year, type) |>
   readr::write_csv(
     file.path("assets", "fsa-normal-grazing-period-simple.csv"),
     quote = "all")
-
-## The US Census county definitions
-## Create a simplified version
-
-counties <-
-  dplyr::bind_rows(
-    tigris::counties(cb = TRUE, resolution = "5m") |>
-      dplyr::transmute(VINTAGE = 2024L, STATEFP, COUNTYFP, STATE_NAME, NAME),
-    tigris::counties(cb = TRUE, resolution = "5m", year = 2014) |>
-      dplyr::left_join(
-        tigris::states(cb = TRUE, resolution = "5m", year = 2014) |>
-          dplyr::transmute(STATEFP, STATE_NAME = NAME) |>
-          sf::st_drop_geometry()
-      ) |>
-      dplyr::arrange(STATEFP, COUNTYFP) |>
-      dplyr::transmute(VINTAGE = 2014L, STATEFP, COUNTYFP, STATE_NAME, NAME)
-  ) |>
-  dplyr::group_by(STATEFP, COUNTYFP) |>
-  dplyr::filter(VINTAGE == max(VINTAGE)) |>
-  dplyr::ungroup() |>
-  dplyr::arrange(STATEFP, COUNTYFP) |>
-  dplyr::filter(!(STATEFP %in% c("60", "78", "14", "52", "69", "66"))) |>
-  sf::st_transform("WGS84") |>
-  dplyr::transmute(id = paste0(STATEFP, COUNTYFP),
-                   state = STATE_NAME,
-                   county = NAME) |>
-  dplyr::distinct()
-
-counties <-
-  counties |>
-  dplyr::select(id) |>
-  rmapshaper::ms_explode(sys = TRUE, sys_mem = 16) |>
-  rmapshaper::ms_dissolve(field = "id", sys = TRUE, sys_mem = 16) |>
-  rmapshaper::ms_simplify(keep = 0.5, sys = TRUE, sys_mem = 16) |>
-  sf::st_make_valid() |>
-  rmapshaper::ms_explode(sys = TRUE, sys_mem = 16) |>
-  rmapshaper::ms_dissolve(field = "id", sys = TRUE, sys_mem = 16) |>
-  rmapshaper::ms_explode(sys = TRUE, sys_mem = 16) |>
-  tigris::shift_geometry() |>
-  sf::st_make_valid() |>
-  sf::st_transform("WGS84") |>
-  rmapshaper::ms_explode(sys = TRUE, sys_mem = 16) |>
-  rmapshaper::ms_dissolve(field = "id", sys = TRUE, sys_mem = 16) |>
-  sf::st_cast("MULTIPOLYGON") |>
-  dplyr::arrange(id) |>
-  dplyr::left_join(
-    counties |>
-      sf::st_drop_geometry() |>
-      dplyr::distinct()
-  )
-
-sf::write_sf(counties, "assets/us-census-counties.geojson", delete_dsn = TRUE)
-
-system(
-  "
-mapshaper \\
-  assets/us-census-counties.geojson \\
-  -clean rewind \\
-  -rename-layers counties \\
-  -dissolve field=state copy-fields='id' + name=states \\
-  -each 'id=id.slice(0,2)' target=states \\
-  -rename-layers counties,states target=counties,states \\
-  -o format=topojson quantization=1e5 fix-geometry id-field='id' bbox target=* assets/us-census-counties.topojson
-"
-)
-
-unlink("assets/us-census-counties.geojson")
 
 ```
 
@@ -222,7 +160,32 @@ value: "duration_weeks"
 
 formatDate = d3.utcFormat("%b %d, %Y")
 
-us = await d3.json("assets/us-census-counties.topojson")
+// FSA county geometry, fetched from the FSA administrative boundary archives
+// rather than vendored here so it tracks those archives.
+//
+// The vintage follows the program year, because FSA reorganised several counties
+// and a single vintage is wrong for the other era. Eight FSA counties changed
+// footprint between dd17 and dd22 — Shoshone ID split out of Benewah and
+// Kootenai, Sioux NE consolidated into 31165, King WA into 53033, Richmond City
+// VA out of Henrico — by as much as a factor of three. Drawing an early year on
+// dd22 leaves the territory of a since-split county blank even though its grazing
+// period was reported, under the office that then administered it.
+//
+// 2015 is the switchover because that is when 16079 (Shoshone) first appears in
+// the grazing period data, and from then on 16009, 16055, and 16079 all report,
+// which is only coherent under the dd22 arrangement. Only Idaho's reorganisation
+// can be dated this way: for Sioux, King, and Richmond both codes report in every
+// program year and their names never change, so the data gives no signal. The
+// vintage labels are no guide either — dd17 nominally holds 2017 definitions yet
+// lacks 16079, which the data already reports in 2015.
+//
+// Every FSA county the archive reports on resolves in its own era, except the
+// island territories, which neither boundary archive includes; those are not drawn.
+us = await d3.json(
+  year <= 2014
+    ? "https://data.sustainable-fsa.com/fsa-counties-dd17/fsa-counties-dd17.topojson"
+    : "https://data.sustainable-fsa.com/fsa-counties-dd22/fsa-counties-dd22.topojson"
+)
 counties = topojson.feature(us, us.objects.counties)
 states = topojson.mesh(us, us.objects.states, (a, b) => a !== b)
 
@@ -324,8 +287,8 @@ Plot.plot({
         fill: "transparent",
         stroke: "none",
         tip: true,
-        title: d => `${d.county} County, ${d.state}
-FIPS: ${String(d.id).padStart(5, "0")}
+        title: d => `${d.county}, ${d.state}
+FSA county code: ${String(d.id).padStart(5, "0")}
 Crop Type: ${type}
 Start: ${d.start_date ? formatDate(d.start_date) : "None"}
 End: ${d.end_date ? formatDate(d.end_date) : "None"}
