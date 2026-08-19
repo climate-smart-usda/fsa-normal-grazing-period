@@ -332,6 +332,78 @@ arrow::write_parquet(fsa_normal_grazing_period,
                      compression_level = 13,
                      use_dictionary = TRUE)
 
+# Browser-optimized JSON mirror of the same records, read by the LFP Explorer web
+# map: column-oriented rather than one object per record, strings dictionary-coded
+# to integer indices, and dates stored as a day-of-year plus a year offset from the
+# program year (grazing periods routinely begin the calendar year before it).
+# Sorted by (pasture type, FSA county, program year) so gzip takes the ~5 MB file
+# to roughly 100 KB. The schema is a frozen contract — add fields; never rename or
+# reorder existing ones without bumping "fsa-ngp-web/1".
+web <-
+  fsa_normal_grazing_period %>%
+  dplyr::transmute(
+    type = `Pasture Type`,
+    county = paste0(`State FSA Code`, `County FSA Code`),
+    county_name = `FSA County Name`,
+    state_name = `FSA State Name`,
+    year = as.integer(`Program Year`),
+    start = `Grazing Period Start Date`,
+    end = `Grazing Period End Date`,
+    sy = as.integer(lubridate::yday(start)),
+    so = as.integer(lubridate::year(start)) - year,
+    ey = as.integer(lubridate::yday(end)),
+    eo = as.integer(lubridate::year(end)) - year
+  ) %>%
+  dplyr::arrange(type, county, year)
+
+# (program year + offset, day-of-year) must reconstruct every date exactly; a
+# lossy encoding would be invisible in the browser.
+stopifnot(
+  identical(lubridate::make_date(web$year + web$so, 1L, 1L) + web$sy - 1L,
+            web$start),
+  identical(lubridate::make_date(web$year + web$eo, 1L, 1L) + web$ey - 1L,
+            web$end)
+)
+
+# Dictionaries. Radix sort is the C locale, so the file is byte-identical
+# whatever locale the runner happens to be in.
+web_types <- sort(unique(web$type), method = "radix")
+web_counties <- sort(unique(web$county), method = "radix")
+
+# One name pair per FSA county — canonicalized above, so a duplicate here means
+# that step regressed.
+web_county_names <- dplyr::distinct(web, county, county_name, state_name)
+stopifnot(
+  !anyDuplicated(web_county_names$county),
+  nrow(web_county_names) == length(web_counties)
+)
+web_county_names <- web_county_names[match(web_counties, web_county_names$county), ]
+
+web_year0 <- min(web$year)
+
+jsonlite::write_json(
+  list(
+    schema = jsonlite::unbox("fsa-ngp-web/1"),
+    license = jsonlite::unbox("CC0-1.0"),
+    year0 = jsonlite::unbox(web_year0),
+    years = range(web$year),
+    types = web_types,
+    counties = web_counties,
+    county_names = web_county_names$county_name,
+    state_names = web_county_names$state_name,
+    n = jsonlite::unbox(nrow(web)),
+    type = match(web$type, web_types) - 1L,
+    county = match(web$county, web_counties) - 1L,
+    year = web$year - web_year0,
+    sy = web$sy,
+    so = web$so,
+    ey = web$ey,
+    eo = web$eo
+  ),
+  "fsa-normal-grazing-period.json",
+  auto_unbox = FALSE, digits = NA
+)
+
 ## Render the interactive dashboard
 quarto::quarto_render("fsa-normal-grazing-period.qmd")
 
@@ -348,6 +420,11 @@ s3_put(bucket = s3_bucket,
        key = paste0(s3_prefix, "/fsa-normal-grazing-period.parquet"),
        file = "fsa-normal-grazing-period.parquet",
        content_type = "application/vnd.apache.parquet")
+
+s3_put(bucket = s3_bucket,
+       key = paste0(s3_prefix, "/fsa-normal-grazing-period.json"),
+       file = "fsa-normal-grazing-period.json",
+       content_type = "application/json")
 
 s3_put(bucket = s3_bucket,
        key = paste0(s3_prefix, "/qa-report.txt"),
@@ -371,6 +448,7 @@ cf_invalidate(
   paths = c(
     paste0("/", s3_prefix, "/fsa-normal-grazing-period.csv"),
     paste0("/", s3_prefix, "/fsa-normal-grazing-period.parquet"),
+    paste0("/", s3_prefix, "/fsa-normal-grazing-period.json"),
     paste0("/", s3_prefix, "/qa-report.txt"),
     paste0("/", s3_prefix, "/_manifest.txt")
   )
