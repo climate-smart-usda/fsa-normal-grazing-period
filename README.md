@@ -48,10 +48,17 @@ program year, or pasture type the other two lack.
   — validation summary and flagged records for the published data
 - [`fsa-normal-grazing-period.R`](./fsa-normal-grazing-period.R) —
   processing script
-- [`fsa-normal-grazing-period.qmd`](./fsa-normal-grazing-period.qmd) —
-  Quarto dashboard source
-- [`fsa-normal-grazing-period.html`](https://sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.html)
-  — interactive summary dashboard
+- [`R/web-assets.R`](./R/web-assets.R) — builds the browser data file
+  the interactive map reads
+- [`assets/fsa-normal-grazing-period-web.json`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/assets/fsa-normal-grazing-period-web.json)
+  — the same records in a compact columnar form for the browser
+- [`index.html`](https://sustainable-fsa.com/fsa-normal-grazing-period/)
+  — the interactive map, served at the Pages root
+- [`help.md`](./help.md) — the map’s in-app help text, fetched and
+  rendered at run time
+- [`css/`](./css) and [`js/`](./js) — the map’s styles and ES modules
+- [`brand/`](./brand) — favicons, logos, and the web manifest
+- [`tools/`](./tools) — build and audit tooling for the map
 - [`_manifest.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/_manifest.txt)
   — flat index of every file in the S3-hosted mirror
 
@@ -59,26 +66,34 @@ program year, or pasture type the other two lack.
 
 The consolidated data (`fsa-normal-grazing-period.csv` and
 `fsa-normal-grazing-period.parquet`), the QA report (`qa-report.txt`),
-the `assets/` directory the dashboard reads from, and the `foia/`
+the `assets/` directory the interactive map reads from, and the `foia/`
 correspondence are all mirrored to S3, served via CloudFront at
 <https://data.sustainable-fsa.com/fsa-normal-grazing-period/> (browse
 the [archive
 listing](https://data.sustainable-fsa.com/fsa-normal-grazing-period/) or
 [`_manifest.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/_manifest.txt)
-for a flat index). The interactive dashboard itself is served
-separately, via GitHub Pages at
-<https://sustainable-fsa.com/fsa-normal-grazing-period/>.
+for a flat index). The interactive map itself is served separately, via
+GitHub Pages at
+<https://sustainable-fsa.com/fsa-normal-grazing-period/>, which serves
+`index.html` from this repository directly; Jekyll processing is
+disabled with a `.nojekyll` file so the map’s own `css/`, `js/`, and
+`brand/` directories are published as written.
 
 Publishing is handled by
 [`fsa-normal-grazing-period.R`](fsa-normal-grazing-period.R) via the
 shared [`R/s3-archive.R`](R/s3-archive.R) helpers, and runs
 automatically in GitHub Actions
 ([`.github/workflows/fsa-normal-grazing-period.yaml`](.github/workflows/fsa-normal-grazing-period.yaml))
-whenever the script, dashboard, or workflow changes, or on manual
-dispatch. The workflow authenticates to AWS via GitHub OIDC (no
-long-lived credentials stored in the repo), re-renders the README and
-dashboard, and commits them back to git only if the rendered output
-changed.
+whenever an input to the archive changes — the processing script, the
+`R/` helpers, the README source, the FOIA inputs, or the workflow itself
+— or on manual dispatch. The map’s own sources are deliberately not
+triggers, since they have no bearing on what is written to S3. The
+workflow authenticates to AWS via GitHub OIDC (no long-lived credentials
+stored in the repo), re-renders the README, and commits it back to git
+only if the rendered output changed. The R pipeline no longer renders a
+dashboard; it writes the browser data file the map reads and stops
+there. A separate audit workflow, which touches no AWS resources, runs
+accessibility and HTML checks against the map whenever its files change.
 
 ------------------------------------------------------------------------
 
@@ -180,7 +195,8 @@ The processing script
 7.  **Validates** the result (see below) and writes a QA report.
 8.  **Exports**
     [`fsa-normal-grazing-period.csv`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.csv).
-9.  **Renders** an interactive Quarto dashboard.
+9.  **Builds** the browser data file the interactive map reads, via
+    [`R/web-assets.R`](./R/web-assets.R) (see *Interactive Map* below).
 
 There is **no aggregation step**. The archive is keyed on the FSA county
 and preserves every record FSA reports; see *Relating FSA counties to
@@ -426,16 +442,30 @@ ngp_fips <-
 
 ------------------------------------------------------------------------
 
-## 📊 Demonstration Dashboard
+## 📊 Interactive Map
 
-The Quarto dashboard
-[`fsa-normal-grazing-period.qmd`](./fsa-normal-grazing-period.qmd)
-provides:
+🔗 <https://sustainable-fsa.com/fsa-normal-grazing-period/>
 
-- An **interactive viewer** to explore NGPs by county, year, and pasture
-  type
-- Visual summaries of **seasonality and regional variation**
-- A **tool for researchers and policymakers** to assess temporal trends
+<figure>
+<img src="brand/app-screenshot.png"
+alt="The Normal Grazing Period web map: a choropleth of the contiguous United States, Alaska, and Hawaii coloured by grazing-period duration, with year, pasture type, and colour-by controls above the map and a county detail card beside it." />
+<figcaption aria-hidden="true">The Normal Grazing Period web map: a
+choropleth of the contiguous United States, Alaska, and Hawaii coloured
+by grazing-period duration, with year, pasture type, and colour-by
+controls above the map and a county detail card beside it.</figcaption>
+</figure>
+
+The archive is published as a single-page web map. Step through program
+years 2008–2026, switch among the 16 pasture types, and colour the
+counties by season start, season end, or duration. Search for a county
+or click one to open a detail card carrying its full 2008–2026 history —
+every grazing-period span for the selected pasture type, charted and
+tabulated — so a county’s drift is legible without leaving the map. The
+address bar always reproduces the current view, so any link you copy or
+bookmark reopens exactly what you were looking at, and a share button
+copies that link for you. Export the current map as a branded PNG for a
+slide or a report, and switch to the high-contrast theme where the
+default palette is hard to read.
 
 The map draws FSA counties, so it shows the archive without reduction —
 administratively split counties such as East and West Lucas, OH appear
@@ -463,11 +493,122 @@ A county with no colour means one of two things:
   in 2016. Every one is listed in
   [`qa-report.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/qa-report.txt).
 
-<iframe src="fsa-normal-grazing-period.html" frameborder="0" allowfullscreen style="width:100%;height:40vw;">
-</iframe>
+The map’s own help text lives in [`help.md`](./help.md) at the
+repository root; the app fetches it and renders it in a help dialog, so
+it is readable here and in the map without being maintained twice.
 
-Access a full-screen version of the dashboard at:  
-<https://sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.html>
+### The browser data file
+
+The map reads a single purpose-built file,
+[`assets/fsa-normal-grazing-period-web.json`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/assets/fsa-normal-grazing-period-web.json),
+written by [`R/web-assets.R`](./R/web-assets.R) from the same records as
+the CSV and Parquet. It declares the schema id `fsa-ngp-web/1` and
+stores the archive as **columnar arrays sorted by (pasture type, FSA
+county, program year)** rather than as an array of objects:
+
+<table>
+<colgroup>
+<col style="width: 39%" />
+<col style="width: 60%" />
+</colgroup>
+<thead>
+<tr>
+<th>Field</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>schema</code>, <code>license</code>,
+<code>generated</code></td>
+<td>schema id, <code>CC0-1.0</code>, and the build date</td>
+</tr>
+<tr>
+<td><code>year0</code>, <code>years</code>, <code>n</code></td>
+<td>the first program year (2008), the year range, and the row
+count</td>
+</tr>
+<tr>
+<td><code>types</code></td>
+<td>the 16 pasture type names, in sort order</td>
+</tr>
+<tr>
+<td><code>counties</code>, <code>county_names</code>,
+<code>state_names</code></td>
+<td>the FSA county keys (<code>State FSA Code</code> +
+<code>County FSA Code</code>) and their county and state names</td>
+</tr>
+<tr>
+<td><code>type</code>, <code>county</code></td>
+<td>per row: zero-based indices into <code>types</code> and
+<code>counties</code></td>
+</tr>
+<tr>
+<td><code>year</code></td>
+<td>per row: the program year, as an offset from <code>year0</code></td>
+</tr>
+<tr>
+<td><code>sy</code>, <code>so</code></td>
+<td>start day-of-year, and the start’s year offset from the program
+year</td>
+</tr>
+<tr>
+<td><code>ey</code>, <code>eo</code></td>
+<td>end day-of-year, and the end’s year offset from the program
+year</td>
+</tr>
+</tbody>
+</table>
+
+Because a grazing period may begin in the calendar year preceding its
+program year and a few end in the year after, the dates are stored as a
+day-of-year plus that offset. They reconstruct exactly — the build
+aborts if they do not:
+
+``` r
+program_year <- year0 + year
+make_date(program_year + so, 1, 1) + sy - 1  # start date
+make_date(program_year + eo, 1, 1) + ey - 1  # end date
+```
+
+The sort order is not cosmetic: it puts each county’s run of years next
+to each other, so the parallel arrays become long stretches of
+near-constant values and compress hard. The file is roughly 5 MB as
+written and about 100 KB gzipped — 55 KB where the server offers Brotli
+— so the whole archive, every year and pasture type, arrives in one
+request and the year slider and type menu redraw without a round trip.
+The schema is a frozen contract, since the map indexes these arrays by
+name and position; fields may be added, but renaming or reordering one
+requires bumping the schema id. Like the rest of the processed data the
+file is released under
+[CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+
+The same script writes the two color ramps the map colors with —
+`assets/colors.json` (cyclic, 366 steps in day-of-year order) and
+`assets/colors-duration.json` (sequential, 53 steps for 0–52 weeks) —
+carried over from the dashboard unchanged, so a map made then and one
+made now use the same colors.
+
+### Dependencies
+
+The map is built on the project’s shared **style kit**
+(<https://sustainable-fsa.com/style/>, repository
+[sustainable-fsa/style](https://github.com/sustainable-fsa/style)),
+which is served same-origin alongside it, and it fetches county TopoJSON
+from the `fsa-counties-dd17` and `fsa-counties-dd22` archives at run
+time, as described above.
+
+### Retired with the dashboard
+
+The Quarto dashboard it replaces is gone, and with it the files only the
+dashboard used: `fsa-normal-grazing-period.qmd` and its rendered
+`fsa-normal-grazing-period.html`, the 17 MB flattened
+`assets/fsa-normal-grazing-period-simple.csv`, and the pre-rendered
+legend PNGs (`assets/legend.png`, `assets/legend-duration.png`), whose
+legends the map now draws itself. **External links to the simple CSV
+will break.** The archive of record — `fsa-normal-grazing-period.csv`
+and `fsa-normal-grazing-period.parquet` — is unchanged, at the same URLs
+as before.
 
 ------------------------------------------------------------------------
 

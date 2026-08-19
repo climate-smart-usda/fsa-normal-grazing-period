@@ -7,3 +7,9 @@
 .Rdata
 .httr-oauth
 .quarto
+/package.json
+/package-lock.json
+/node_modules/
+tools/node_modules/
+verify-out/
+.lighthouseci/

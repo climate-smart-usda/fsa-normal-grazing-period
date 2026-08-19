@@ -1,0 +1,27 @@
+{
+  "//": "Lighthouse CI for the FSA Normal Grazing Periods map. staticDistDir is deliberately NOT used: it serves the given directory at the server ROOT, and this app deploys under /fsa-normal-grazing-period/ — a root-served copy resolves brand/site.webmanifest and assets/*.json fine but changes the geometry every other tool here audits, and the meta CSP's 'self' would then mean a different origin path. So collect.url points at a server the caller must already have running. Bring it up over the WORKSPACE root, not the repo: python3 -m http.server 8000 -d /path/to/sustainable-fsa   then: npx --prefix tools lhci autorun --config=.lighthouserc.json",
+  "ci": {
+    "collect": {
+      "url": ["http://localhost:8000/fsa-normal-grazing-period/"],
+      "numberOfRuns": 1,
+      "settings": {
+        "onlyCategories": ["accessibility", "best-practices", "performance"],
+        "//": "The app's own boot marker (dataset.ngpReady) is the render gate everywhere else in this suite; Lighthouse cannot read it, so it gets a generous fixed wait instead. maxWaitForLoad covers the 5.1 MB local payload plus the ~440 KB (gzipped) county boundary archive fetched live from sustainable-fsa.com.",
+        "maxWaitForLoad": 60000,
+        "chromeFlags": "--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader --ignore-gpu-blocklist --enable-webgl --no-sandbox"
+      }
+    },
+    "assert": {
+      "//": "NO COMMENT KEY BELOW. Every key inside `assertions` is read as an audit or category id, and a \"//\" there fails the run with '\"//\" is not a known audit'. Accessibility is the hard gate: axe over six interaction states already passes at zero serious/critical, so a Lighthouse a11y score under 1.0 means something the interaction audit cannot see. Best-practices is an error too. Performance is a WARNING on purpose — the page ships a 5 MB JSON payload and pulls a ~2 MB boundary archive over the network by design, and under Lighthouse's simulated mobile throttling that lands around 0.3. Treat the number as a trend line, not a gate; the fix is a payload change, not a threshold change.",
+      "assertions": {
+        "categories:accessibility": ["error", { "minScore": 1 }],
+        "categories:best-practices": ["error", { "minScore": 0.95 }],
+        "categories:performance": ["warn", { "minScore": 0.9 }]
+      }
+    },
+    "upload": {
+      "target": "filesystem",
+      "outputDir": ".lighthouseci"
+    }
+  }
+}

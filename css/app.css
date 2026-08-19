@@ -1,0 +1,476 @@
+/* ============================================================================
+   FSA Normal Grazing Periods · css/app.css
+   APP LAYOUT ONLY. The kit (theme/sfsa-theme.css) owns every component — the
+   navbar, buttons, range, panel, card, combobox, modal, toast, tooltip. What
+   lives here is the page skeleton and the placement decisions the kit
+   deliberately leaves to the app ("positioning is the app's job — the kit does
+   not know which corner is free").
+
+   Loaded AFTER the theme, so anything here that touches a kit selector wins
+   without !important. There is exactly one such rule, and it is tagged
+   `kit-override:` with its reason. Everything else is either an app-owned id
+   (#map, #legend-panel, #county-card) or a control the kit ships no component
+   for (a <select> in the navbar).
+
+   Contents:
+     1. Page shell            5. County card interior
+     2. Map + status pill     6. Footer
+     3. Navbar control sizing 7. Compact
+     4. Legend panel
+   ========================================================================== */
+
+/* ── 1. Page shell ────────────────────────────────────────────────────────
+   A three-row grid: navbar (auto) · map (1fr) · footer (auto).
+
+   100dvh, never 100vh: on iOS Safari 100vh is the URL-bar-HIDDEN height, so
+   the bottom of the map — where the legend, the bottom sheet and the corner
+   controls live — would sit under the browser chrome (HOUSE-STYLE §3). */
+html { height: 100%; }
+
+body {
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  /* The map fills its own row and the sheet/panel surfaces are positioned
+     inside it; nothing on this page is meant to scroll. */
+  overflow: hidden;
+}
+
+/* min-height: 0 lets the 1fr row actually shrink — without it a grid item's
+   automatic minimum size keeps the map from ever being smaller than its
+   content, and the footer gets pushed off a short viewport. */
+main {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── 2. Map + status pill ────────────────────────────────────────────────── */
+
+#map {
+  position: absolute;
+  inset: 0;
+}
+
+/* Boot progress, vintage swaps, and fetch failures. Centred at the top of the
+   map, above the panels (--z-map-progress) but below the navbar. */
+#app-note {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-map-progress);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: min(calc(100% - 1.5rem), 34rem);
+  padding: 0.4rem 0.5rem 0.4rem 0.85rem;
+  border: 1px solid var(--ctrl-border);
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+/* A failure is a different KIND of message, not just a redder one: it also
+   carries the Retry button, so the border change is redundant with content
+   rather than the only signal (WCAG 1.4.1). */
+#app-note[data-tone="error"] { border-color: var(--accent-line); }
+
+/* No text label to pad around when the pill is only a sentence. */
+#app-note:not(:has(button)) { padding-right: 0.85rem; }
+
+/* ── 3. Navbar control sizing ─────────────────────────────────────────────
+   The kit ships no <select> component, so the pasture-type menu is styled
+   here to match the kit's search input: same height, border, radius, and
+   type scale. Not an override — there is nothing to override. */
+
+#type-select {
+  min-height: 34px;
+  max-width: 15rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--ctrl-border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+#type-select:hover { border-color: var(--accent-line); }
+#type-select[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+/* The theme sizes the range for a full-width container (width: 100%); in a
+   navbar it needs a fixed track instead, or it eats the bar. */
+#year-range { width: 8.5rem; }
+
+/* Same idea for the search field: the kit sets its box, the app sets how much
+   of the bar it is allowed to take. */
+.sfsa-combobox input[type="search"] { width: 11rem; }
+
+/* ── 4. Legend panel ──────────────────────────────────────────────────────
+   Bottom-right, which is free: the map's navigation and fit controls are
+   installed top-LEFT (app.js) precisely so the two right-hand corners can hold
+   the app's own surfaces. --sheet-h lifts the panel clear of the bottom sheet
+   on compact viewports; it is 0px until a sheet opens, so this calc is inert
+   the rest of the time. */
+#legend-panel {
+  right: 0.75rem;
+  bottom: calc(0.75rem + var(--sheet-h, 0px));
+  width: min(280px, calc(100vw - 1.5rem));
+  transition: bottom var(--transition);
+}
+
+/* The month wheel (N-W4) draws into a square; the placeholder holds the same
+   box so the panel does not resize when the real legend arrives. */
+#legend-wheel {
+  width: 100%;
+  max-width: 200px;
+  margin: 0 auto;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#legend-wheel > svg { width: 100%; height: auto; display: block; }
+
+.legend-placeholder {
+  font-size: 0.72rem;
+  font-style: italic;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* The kit's colorbar sizes its own SVG; this is just breathing room. */
+#legend-bar { margin-top: 0.15rem; }
+
+#legend-key {
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+/* ── 5. County card ───────────────────────────────────────────────────────
+   Top-right, above the legend in both senses: the card is one z-tier up
+   (--z-detail), so on a short window the two may overlap and the card wins —
+   which is the right precedence for the surface the user just opened. The
+   legend is collapsible, and under compact the card becomes a bottom sheet and
+   the question disappears. */
+/* Scoped to the complement of the kit's compact MQ ((max-width: 640px),
+   (max-height: 560px)): at ID specificity this rule would otherwise defeat the
+   kit's class-level bottom-sheet dock and pin the card under the navbar on
+   phones with its close button untappable (defect NGP-1, found by
+   tools/verify.mjs). Under compact, the kit's .sfsa-card sheet rules apply
+   unopposed. */
+@media (min-width: 641px) and (min-height: 561px) {
+  #county-card {
+    top: 0.75rem;
+    right: 0.75rem;
+    /* kit-override: the kit caps the card at min(70dvh, 640px), which assumes a
+       card anchored to a full-height column. This one is inset 0.75rem inside
+       <main>, which is shorter than the viewport by the navbar and the footer,
+       so it also has to clear its own container. */
+    max-height: min(70dvh, 640px, 100% - 1.5rem);
+  }
+}
+
+#card-rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.75rem;
+  margin: 0 0 0.25rem;
+}
+#card-rows dt {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  align-self: baseline;
+}
+#card-rows dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+/* Prose rows — "No data for …", "no polygon in this vintage" — are sentences,
+   not values: they get the UI font and the muted color so they do not read as
+   a measurement. */
+#card-rows dd.card-note {
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* ── 6. Footer ───────────────────────────────────────────────────────────── */
+
+.app-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  padding:
+    0.35rem
+    max(0.75rem, env(safe-area-inset-right))
+    calc(0.35rem + env(safe-area-inset-bottom))
+    max(0.75rem, env(safe-area-inset-left));
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.footer-line { margin: 0; }
+
+/* Links in a text block are underlined, not color-only (WCAG 1.4.1). */
+.app-footer a {
+  color: var(--accent-line);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.app-footer a:hover { text-decoration-thickness: 2px; }
+
+.footer-logo {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+}
+/* 432×159 intrinsic; 28px tall renders 76px wide. */
+.footer-logo img {
+  height: 28px;
+  width: auto;
+  display: block;
+}
+
+.footer-code { margin-left: auto; }
+
+/* ── 7. Compact ───────────────────────────────────────────────────────────
+   The string matches the kit's compact query character for character
+   (theme §6 / core's viewport.COMPACT_MQ). */
+@media (max-width: 640px), (max-height: 560px) {
+  /* Keep the footer to one line on a phone: the funder acknowledgement is
+     CLIPPED, not removed, so it stays in the accessibility tree and in the
+     page's text — the same discipline the kit applies to shed button labels. */
+  .app-footer > span.footer-line {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  #legend-panel {
+    right: max(0.75rem, env(safe-area-inset-right));
+    left: auto;
+    width: min(260px, calc(100vw - 1.5rem));
+  }
+
+  /* The type menu and the range share the bar with everything else once the
+     labels have been shed; let them shrink rather than wrap the navbar into a
+     third row. */
+  #type-select { max-width: 10rem; }
+  #year-range { width: 6.5rem; }
+}
+
+/* WCAG 2.5.5 — match the kit's touch sizing on the one control it does not
+   ship. */
+@media (hover: none) {
+  #type-select { min-height: 40px; }
+}
+
+/* ============================================================================
+   ===== N-W4 feature styles ==================================================
+   The four feature modules' chrome: the month wheel's box, the card's span
+   chart and its table twin, and the on-demand data table in #table-modal.
+
+   TOKENS ONLY. Every color below is a var(--…); the only literal colors these
+   features draw are DATA colors (the two ramps, the no-data fill), and those
+   are set in JS from assets/colors*.json and the --no-data token, never here.
+
+   A correction to this file's own header: it says there is "exactly one"
+   kit-override here. There are now two — the second is the #table-modal width
+   in §10 below, tagged the same way and for the same kind of reason.
+
+   Contents:
+     8. Month wheel      9. Card span chart + table
+    10. Data table modal
+   ========================================================================== */
+
+/* ── 8. Month wheel ───────────────────────────────────────────────────────
+   §4 already sizes #legend-wheel and its child <svg>; what is left is the one
+   thing the SVG cannot say for itself. The wheel's month labels are authored
+   at 11.5 user units in a 220-unit viewBox, so they scale WITH the wheel —
+   which is the point (the ring and its labels are one drawing) but means they
+   shrink on a narrow panel. The panel is capped at 200px, so the labels land
+   at ~10.5px: small, and deliberately not the reading channel. #legend-key is.
+   No rule needed here; this comment exists so the next reader does not "fix"
+   it with a fixed font-size that would break the ring's proportions. */
+
+/* ── 9. Card span chart + table twin ─────────────────────────────────────── */
+
+.span-figure {
+  margin: 0.35rem 0 0;
+}
+.span-figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The <details> twin. Closed by default: the chart is the fast read, and a
+   19-row table under a floating card would push the map's own content off a
+   short window. The summary is a real control, so it gets a control's target. */
+#card-table-details {
+  margin-top: 0.4rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.35rem;
+}
+#card-table-details > summary {
+  cursor: pointer;
+  padding: 0.2rem 0;
+  font-size: 0.72rem;
+  color: var(--accent-line);
+  /* list-item keeps the native disclosure triangle — it is the affordance that
+     says "this opens", and a custom marker would have to re-earn that. */
+  display: list-item;
+  list-style-position: inside;
+}
+#card-table-details > summary:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.card-table {
+  width: 100%;
+  margin-top: 0.35rem;
+  border-collapse: collapse;
+  font-size: 0.7rem;
+  /* Tabular figures so the date column reads as a column and not as ragged
+     text — the same reason #card-rows dd is monospaced. */
+  font-variant-numeric: tabular-nums;
+}
+.card-table th,
+.card-table td {
+  padding: 0.15rem 0.35rem 0.15rem 0;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.card-table thead th {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--ctrl-border);
+}
+.card-table tbody th {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.card-table td {
+  color: var(--text-secondary);
+}
+.card-table .card-table-empty {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* ── 10. Data table modal ─────────────────────────────────────────────────
+   kit-override: .info-modal-box is authored at min(540px, …) for a column of
+   prose — the help modal. This one holds a six-column table of three thousand
+   rows, and 540px would wrap every county name. Widened for THIS dialog only;
+   the help modal keeps the kit's measure. */
+#table-modal .info-modal-box {
+  width: min(960px, calc(100vw - 2rem));
+}
+
+/* The table scrolls inside the box rather than the box growing past the
+   viewport: the modal header (with the live caption) stays put, and the sticky
+   header row keeps the column meanings on screen through three thousand rows. */
+#table-modal-body {
+  max-height: min(60dvh, 520px);
+  overflow: auto;
+  /* A scrollable region needs to be reachable and announced as one: table-view
+     .js gives it tabindex and a label. The border makes the edge visible. */
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+.data-table caption {
+  text-align: left;
+}
+.data-table th,
+.data-table td {
+  padding: 0.3rem 0.6rem;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  /* Opaque, not --glass: rows scroll UNDER this row, and a translucent header
+     over arbitrary text is unreadable at any contrast ratio. */
+  background: var(--bg-surface);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  box-shadow: inset 0 -1px 0 0 var(--ctrl-border);
+}
+.data-table tbody th {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.data-table td {
+  color: var(--text-secondary);
+}
+.data-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.data-table tbody tr:hover th,
+.data-table tbody tr:hover td {
+  background: var(--bg-raised);
+}
+.data-table code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--text-primary);
+}
+
+/* Compact: the table modal is nearly the whole screen on a phone, and the
+   type has to shrink or the six columns become a horizontal scroll bar with
+   two columns visible. It still scrolls sideways if it must — a table is
+   allowed to be wide, it is not allowed to be truncated. */
+@media (max-width: 640px), (max-height: 560px) {
+  #table-modal .info-modal-box {
+    width: calc(100vw - 2rem);
+    padding: 1rem;
+  }
+  #table-modal-body { max-height: 62dvh; }
+  .data-table { font-size: 0.72rem; }
+  .data-table th,
+  .data-table td { padding: 0.25rem 0.4rem; }
+}

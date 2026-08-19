@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- viewport-fit=cover makes env(safe-area-inset-*) live on notched phones.
+       Without it every safe-area padding in the kit silently resolves to 0. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <!-- ▸ Content-Security-Policy — adapted from the kit's snippets/head.html.
+       Shipped as a <meta> because GitHub Pages serves no custom headers, which
+       is also why frame-ancestors is absent (it is ignored in meta form).
+
+       Deltas from the kit snippet, both deliberate:
+         · 'self' is added to font-src (the kit lists only the absolute origin).
+           Kit files are referenced by FULL PINNED URL — https://sustainable-fsa.com
+           /style/v0.1.0/… for the versioned surface, /style/vendor|assets/… for
+           the lib- and brand-pinned surfaces. In production those are this
+           page's own origin; from a localhost dev server they load cross-origin
+           (GitHub Pages sends access-control-allow-origin: *), which is why the
+           absolute host stays in script-src/style-src/font-src/img-src/connect-src.
+         · manifest-src 'self' is ADDED. The snippet has no web app manifest;
+           this app ships one, and with default-src 'none' a manifest fetch is
+           blocked unless manifest-src says otherwise.
+
+       worker-src blob: is required by MapLibre GL, which starts its tile
+       workers from blob URLs. The sha256 below is the hash of THIS page's copy
+       of the anti-flash script — recompute it (recipe in the kit snippet) after
+       changing so much as a space in that block. -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    script-src 'self' https://sustainable-fsa.com 'sha256-LPFJ4AZ57k/jilkpHbQqk/EzU/DRDaWx9C48PTiXlu0=';
+    worker-src blob:;
+    style-src 'self' https://sustainable-fsa.com;
+    font-src 'self' https://sustainable-fsa.com;
+    img-src 'self' data: blob: https://sustainable-fsa.com;
+    connect-src 'self' https://sustainable-fsa.com;
+    manifest-src 'self';
+    base-uri 'none';
+    form-action 'none';
+  ">
+
+  <!-- ▸ Anti-flash theme boot. INLINE and FIRST, above every stylesheet: loaded
+       from a file it would run after first paint and reintroduce the flash it
+       exists to prevent. The body below is copied verbatim from the kit's
+       snippets/anti-flash.html; the hash in the CSP above is of THIS PAGE's
+       bytes (the closing tag sits one indent level in, which is enough to make
+       it differ from the hash the snippet publishes).
+
+       RECOMPUTING IT — the kit's rsplit recipe does not work on this page. It
+       assumes the anti-flash block is the LAST script pair in the file, which
+       is true of the snippet and false here: three more script tags follow at
+       the end of the body. Instead: strip every HTML comment from this file,
+       find the first script element with no src attribute, and sha256 exactly
+       the bytes between its open and close tags (a leading newline, two-space
+       indentation, and a trailing newline plus two spaces are all part of it).
+       Base64 that digest and prefix it with "sha256-". Changing the indentation
+       of this block changes the hash, and the failure is quiet: the theme still
+       renders, the flash just comes back. -->
+  <script>
+  (function () {
+    var valid = ['light', 'high-contrast'];
+    var raw = new URLSearchParams(location.search).get('theme');
+    var url = raw == null ? null : raw.toLowerCase();
+    var saved = null;
+    try { saved = localStorage.getItem('sfsa-theme'); } catch (e) {}
+    var moreContrast = window.matchMedia('(prefers-contrast: more)').matches;
+    var t = valid.indexOf(url) > -1 ? url
+          : valid.indexOf(saved) > -1 ? saved
+          : (moreContrast ? 'high-contrast' : 'light');
+    document.documentElement.dataset.theme = t;
+  })();
+  </script>
+
+  <title>Grazing Periods · Sustainable FSA</title>
+  <meta name="description" content="An interactive map of USDA Farm Service Agency normal grazing periods by county, pasture type, and program year, 2008–2026.">
+  <meta name="author" content="Sustainable FSA">
+  <meta name="theme-color" content="#B7410E">
+
+  <link rel="canonical" href="https://sustainable-fsa.com/fsa-normal-grazing-period/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Sustainable FSA">
+  <meta property="og:title" content="Grazing Periods · Sustainable FSA">
+  <meta property="og:description" content="An interactive map of USDA Farm Service Agency normal grazing periods by county, pasture type, and program year, 2008–2026.">
+  <meta property="og:url" content="https://sustainable-fsa.com/fsa-normal-grazing-period/">
+  <!-- Generated later in the build; referenced now so the card is complete the
+       moment the file lands. -->
+  <meta property="og:image" content="https://sustainable-fsa.com/fsa-normal-grazing-period/brand/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="A map of the United States with counties colored by the length of their FSA normal grazing period.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Grazing Periods · Sustainable FSA">
+  <meta name="twitter:description" content="An interactive map of USDA Farm Service Agency normal grazing periods by county, pasture type, and program year, 2008–2026.">
+  <meta name="twitter:image" content="https://sustainable-fsa.com/fsa-normal-grazing-period/brand/og-image.png">
+
+  <!-- Favicons / app icons: kit-hosted and UNVERSIONED, per snippets/head.html
+       — an icon change is not a breaking change. The manifest is this app's
+       own (its name and start_url are app-specific) and points at the same kit
+       icons. -->
+  <link rel="icon" href="https://sustainable-fsa.com/style/assets/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="48x48" href="https://sustainable-fsa.com/style/assets/favicon-48x48.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="https://sustainable-fsa.com/style/assets/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="https://sustainable-fsa.com/style/assets/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://sustainable-fsa.com/style/assets/apple-touch-icon.png">
+  <link rel="manifest" href="brand/site.webmanifest">
+
+  <!-- House font. crossorigin is MANDATORY on a font preload even same-origin:
+       fonts are fetched in CORS mode, and a preload without it fetches the file
+       twice and warns. The @font-face lives in sfsa-theme.css and its src is
+       relative to that stylesheet, so this must point at the same path the
+       stylesheet is loaded from. -->
+  <link rel="preload" as="font" type="font/woff2" crossorigin
+        href="https://sustainable-fsa.com/style/v0.1.0/theme/fonts/roboto-v51-latin-wght.woff2">
+
+  <link rel="stylesheet" href="https://sustainable-fsa.com/style/vendor/maplibre-gl-5.18.0/maplibre-gl.css">
+  <link rel="stylesheet" href="https://sustainable-fsa.com/style/v0.1.0/theme/sfsa-theme.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+
+<body>
+  <a class="sfsa-skip-link" href="#main">Skip to map</a>
+
+  <!-- ══ Navbar ═══════════════════════════════════════════════════════════
+       Kit structure (theme §5): .sfsa-navbar > .logo-link + .nav-divider +
+       .brand + .controls + .nav-meta. -->
+  <header class="sfsa-navbar">
+    <a class="logo-link" href="https://sustainable-fsa.com" aria-label="Sustainable FSA — home">
+      <!-- Two sibling images swapped by a pure-CSS breakpoint (≤750px). Both
+           carry alt="" — they are decoration inside a link that already has its
+           own accessible name (HOUSE-STYLE §5.11). Explicit width/height on
+           each keeps the swap free of layout shift. -->
+      <img class="banner-img" src="https://sustainable-fsa.com/style/assets/sustainable-fsa-banner.svg" alt="" width="1225" height="350">
+      <img class="badge-img" src="https://sustainable-fsa.com/style/assets/android-chrome-192x192.png" alt="" width="192" height="192">
+    </a>
+
+    <div class="nav-divider" aria-hidden="true"></div>
+
+    <div class="brand">
+      <h1 class="brand-title">FSA Normal Grazing Periods</h1>
+      <span class="brand-subtitle">A Sustainable FSA project</span>
+    </div>
+
+    <div class="controls">
+      <div class="sfsa-range">
+        <label class="control-label" for="year-range">Year</label>
+        <!-- min/max match the frozen payload's program-year range; app.js
+             re-checks them against data.js years() once the data lands. -->
+        <input type="range" id="year-range" min="2008" max="2026" step="1" value="2026">
+        <output id="year-out" for="year-range">2026</output>
+      </div>
+
+      <label class="control-label" for="type-select">Pasture type</label>
+      <!-- One static placeholder; app.js replaces the whole list from the
+           payload's type dictionary at boot. -->
+      <select id="type-select">
+        <option value="Native Pasture">Native Pasture</option>
+      </select>
+
+      <div class="seg-btns" role="group" aria-label="Color by">
+        <button type="button" class="nav-btn seg-btn" id="btn-var-start" data-variable="start" aria-pressed="false">Start</button>
+        <button type="button" class="nav-btn seg-btn" id="btn-var-end" data-variable="end" aria-pressed="false">End</button>
+        <button type="button" class="nav-btn seg-btn" id="btn-var-duration" data-variable="duration" aria-pressed="true">Duration</button>
+      </div>
+
+      <!-- Combobox shell exactly as theme §5 documents it. app.js hands the
+           input and the <ul> to the kit's initSearchBox, which owns every ARIA
+           attribute below from then on. -->
+      <div class="sfsa-combobox sfsa-search-collapse" id="search-wrap">
+        <label class="sr-only" for="county-search">Search counties</label>
+        <input type="search" id="county-search" placeholder="Search counties…"
+               role="combobox" aria-expanded="false" aria-controls="county-results"
+               aria-autocomplete="list" aria-haspopup="listbox" autocomplete="off">
+        <kbd>/</kbd>
+        <!-- html-validate's prefer-native-element maps role="listbox" to
+             <select>, which is wrong for an ARIA 1.2 combobox: the popup is a
+             listbox owned by a text input, and a <select> cannot be one. The
+             role is excluded in .htmlvalidate.json — that file is JSON and
+             cannot carry a comment, so the reason lives here. -->
+        <ul id="county-results" role="listbox" aria-label="County search results" hidden></ul>
+      </div>
+    </div>
+
+    <div class="nav-meta">
+      <button type="button" class="nav-btn icon-only sfsa-search-toggle" id="btn-search-toggle"
+              aria-expanded="false" aria-controls="search-wrap" aria-label="Search counties">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <circle cx="11" cy="11" r="7"></circle><line x1="16.5" y1="16.5" x2="21" y2="21"></line>
+        </svg>
+      </button>
+
+      <button type="button" class="nav-btn icon-only" id="btn-table" aria-label="View data as a table">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <rect x="3" y="4" width="18" height="16" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="9" x2="9" y2="20"></line>
+        </svg>
+      </button>
+
+      <button type="button" class="nav-btn" id="btn-export" aria-label="Export map as PNG">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <path d="M12 3v12"></path><polyline points="7 10 12 15 17 10"></polyline><path d="M4 20h16"></path>
+        </svg>
+        <span class="btn-label">Export</span>
+      </button>
+
+      <button type="button" class="nav-btn" id="btn-share" aria-label="Copy a link to this view">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <path d="M10 13.5a4 4 0 0 0 5.7.4l3-3a4 4 0 0 0-5.7-5.7l-1.3 1.3"></path>
+          <path d="M14 10.5a4 4 0 0 0-5.7-.4l-3 3a4 4 0 0 0 5.7 5.7l1.3-1.3"></path>
+        </svg>
+        <span class="btn-label">Share</span>
+      </button>
+
+      <!-- aria-pressed and aria-label are both maintained by the kit's
+           initThemeToggle; the values here are the light-theme starting state. -->
+      <button type="button" class="nav-btn icon-only" id="btn-theme"
+              aria-pressed="false" aria-label="Switch to high-contrast theme">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" aria-hidden="true" focusable="false">
+          <circle cx="12" cy="12" r="9"></circle><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"></path>
+        </svg>
+      </button>
+
+      <button type="button" class="nav-btn sfsa-btn-info" id="btn-info" aria-label="About this map">?</button>
+    </div>
+  </header>
+
+  <!-- ══ Map + floating surfaces ══════════════════════════════════════════ -->
+  <main id="main" tabindex="-1">
+    <!-- role="application" is safe here only because the container carries a
+         real label and every pointer route has a keyboard twin (search box,
+         county card, on-demand table). -->
+    <div id="map" role="application" aria-label="Choropleth map of USDA FSA normal grazing periods by county"></div>
+
+    <!-- Boot progress, vintage swaps, and fetch failures. role="status" so the
+         same words reach a screen reader; hidden until there is something to
+         say. -->
+    <p id="app-note" role="status" hidden></p>
+
+    <section id="legend-panel" class="sfsa-panel" aria-labelledby="legend-title">
+      <div class="sfsa-panel-head">
+        <h2 class="sfsa-panel-title" id="legend-title">Legend</h2>
+        <button type="button" class="sfsa-panel-toggle" id="legend-toggle"
+                aria-expanded="true" aria-controls="legend-body" aria-label="Collapse legend">
+          <!-- stroke="currentColor" is spelled out here because the kit styles
+               `.nav-btn svg` but not `.sfsa-panel-toggle svg` — an SVG with no
+               stroke draws nothing at all. The theme rotates this chevron to
+               show the ACTION: down when expanded, up when collapsed. -->
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <polyline points="6 15 12 9 18 15"></polyline>
+          </svg>
+        </button>
+      </div>
+      <div class="sfsa-panel-body" id="legend-body">
+        <!-- Two mutually exclusive legend bodies, swapped by app.js with the
+             color-by variable: the month wheel for the cyclic date scales, the
+             colorbar for duration. #legend-wheel is filled by N-W4's
+             js/legend-wheel.js; the placeholder holds its space until then. -->
+        <div id="legend-wheel" hidden>
+          <p class="legend-placeholder">Month wheel legend loading…</p>
+        </div>
+        <div id="legend-bar"></div>
+        <!-- The always-present TEXT channel: what the colors mean, in a
+             sentence, for readers for whom the colors mean nothing. -->
+        <p id="legend-key" class="sfsa-legend-key"></p>
+      </div>
+    </section>
+
+    <!-- NOT a <dialog>: showModal() would trap focus and make the map inert,
+         and panning/hovering/searching with a county open is the whole point.
+         role="dialog" + aria-modal="false" + tabindex="-1" is the kit's
+         documented exception; ui/card.js does the focus management by hand. -->
+    <div class="sfsa-card" id="county-card" role="dialog" aria-modal="false"
+         aria-labelledby="card-title" tabindex="-1" hidden>
+      <div class="sfsa-card-head">
+        <h2 class="sfsa-card-title" id="card-title">County</h2>
+        <button type="button" class="card-close" id="card-close" aria-label="Close county details">×</button>
+      </div>
+      <div class="sfsa-card-body">
+        <!-- The selected year/type readout — the choropleth's number, which is
+             the redundancy that keeps color from being the sole channel. -->
+        <dl id="card-rows"></dl>
+        <!-- N-W4: js/card-content.js renders the all-years span chart and its
+             details table in here. -->
+        <div id="card-content"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <p class="footer-line">
+      Part of the
+      <a href="https://www.ars.usda.gov/research/project/?accnNo=444612">Enhancing Sustainable Disaster Relief in FSA Programs</a>
+      project
+    </p>
+    <span class="footer-line">Supported by the USDA OCE-OEEP and the USDA Climate Hubs · Data: USDA FSA via FOIA</span>
+    <a class="footer-logo" href="https://climate.umt.edu" aria-label="Montana Climate Office">
+      <img src="https://sustainable-fsa.com/style/assets/MCO_logo.svg" alt="" width="432" height="159">
+    </a>
+    <a class="footer-code" href="https://github.com/sustainable-fsa/fsa-normal-grazing-period">Code on GitHub</a>
+  </footer>
+
+  <!-- Pointer-following tooltip. Decorative for AT (aria-hidden): the same
+       content reaches a screen reader through the live region and the card. -->
+  <div class="sfsa-tooltip" id="tooltip" aria-hidden="true"></div>
+
+  <dialog class="sfsa-modal" id="info-modal" aria-labelledby="info-modal-title">
+    <div class="info-modal-box">
+      <div class="info-modal-header">
+        <div>
+          <h2 class="info-modal-title" id="info-modal-title">About this map</h2>
+          <p class="info-modal-subtitle">USDA FSA normal grazing periods · 2008–2026</p>
+        </div>
+        <button type="button" class="modal-close" data-close-modal aria-label="Close help">×</button>
+      </div>
+      <!-- ui/help.js REPLACES this with the rendered help.md from this repo.
+           What stands below is the offline fallback, so the modal is never an
+           empty box — author-written literal HTML, never interpolated data. -->
+      <div class="info-section" data-help-content>
+        <p>
+          This map shows the normal grazing periods USDA's Farm Service Agency
+          reported for each FSA county, pasture type, and program year. It is a
+          research reference, not a determination: FSA county offices are the
+          authoritative source for the dates that apply to a producer, and
+          eligibility questions belong with them. Consult your local FSA office —
+          find it with the
+          <a href="https://offices.sc.egov.usda.gov/locator/app">USDA Service Center Locator</a>.
+        </p>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="sfsa-modal" id="table-modal" aria-labelledby="table-modal-title">
+    <div class="info-modal-box">
+      <div class="info-modal-header">
+        <div>
+          <h2 class="info-modal-title" id="table-modal-title">Data table</h2>
+          <p class="info-modal-subtitle" id="table-modal-caption"></p>
+        </div>
+        <button type="button" class="modal-close" data-close-modal aria-label="Close the data table">×</button>
+      </div>
+      <!-- N-W4: js/table-view.js builds the sorted, scope'd table in here on
+           demand — the escape hatch half of the a11y twin (HOUSE-STYLE §5.2). -->
+      <div class="info-section" id="table-modal-body"></div>
+    </div>
+  </dialog>
+
+  <!-- Vendored UMD builds, CLASSIC scripts: they define window.maplibregl and
+       window.topojson and must be evaluated before the app module reads them.
+       js/app.js is an ES module and therefore deferred by definition, so it
+       runs after both and after the document has parsed. -->
+  <script src="https://sustainable-fsa.com/style/vendor/maplibre-gl-5.18.0/maplibre-gl.js"></script>
+  <script src="https://sustainable-fsa.com/style/vendor/topojson-client-3.1.0/topojson-client.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
