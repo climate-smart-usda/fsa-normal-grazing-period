@@ -44,6 +44,8 @@ program year, or pasture type the other two lack.
   county, and pasture type
 - [`fsa-normal-grazing-period.parquet`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.parquet)
   — the same records as Parquet
+- [`fsa-normal-grazing-period.json`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.json)
+  — the same records restructured for browsers (see *Output Data*)
 - [`qa-report.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/qa-report.txt)
   — validation summary and flagged records for the published data
 - [`fsa-normal-grazing-period.R`](./fsa-normal-grazing-period.R) —
@@ -57,10 +59,10 @@ program year, or pasture type the other two lack.
 
 ## ☁️ Archive Hosting & Automated Publishing
 
-The consolidated data (`fsa-normal-grazing-period.csv` and
-`fsa-normal-grazing-period.parquet`), the QA report (`qa-report.txt`),
-the `assets/` directory the dashboard reads from, and the `foia/`
-correspondence are all mirrored to S3, served via CloudFront at
+The consolidated data (`fsa-normal-grazing-period.csv`, `.parquet`, and
+`.json`), the QA report (`qa-report.txt`), the `assets/` directory the
+dashboard reads from, and the `foia/` correspondence are all mirrored to
+S3, served via CloudFront at
 <https://data.sustainable-fsa.com/fsa-normal-grazing-period/> (browse
 the [archive
 listing](https://data.sustainable-fsa.com/fsa-normal-grazing-period/) or
@@ -178,8 +180,7 @@ The processing script
     county-name variants were canonicalized in step 4. No record
     differing in its dates is ever merged with another.
 7.  **Validates** the result (see below) and writes a QA report.
-8.  **Exports**
-    [`fsa-normal-grazing-period.csv`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/fsa-normal-grazing-period.csv).
+8.  **Exports** the archive as CSV, Parquet, and browser-optimized JSON.
 9.  **Renders** an interactive Quarto dashboard.
 
 There is **no aggregation step**. The archive is keyed on the FSA county
@@ -297,6 +298,31 @@ Three things to know before using the data:
   15 county-years are missing inside a county’s own span of reporting,
   and are listed in
   [`qa-report.txt`](https://data.sustainable-fsa.com/fsa-normal-grazing-period/qa-report.txt).
+
+### `fsa-normal-grazing-period.json`
+
+The same records as the CSV and Parquet — derived from the identical
+validated table in the same run — restructured for direct use in a
+browser. It is what the [LFP
+Explorer](https://sustainable-fsa.com/lfp-explorer/) map loads, not an
+archive-of-record format; for analysis, use the CSV or Parquet. It
+differs in structure, not content:
+
+- **Column-oriented**: one array per field with one entry per record,
+  rather than one object per record, sorted by pasture type, FSA county,
+  and program year so the file gzips from ~5 MB to roughly 100 KB over
+  the wire.
+- **Dictionary-coded strings**: pasture types, FSA county codes, and
+  county and state names each appear once in a lookup array; the record
+  arrays hold integer indices into them.
+- **Compact dates**: each date is a day-of-year plus a year offset from
+  the program year, not an ISO string. Winter grazing periods start in
+  the calendar year before their program year, so the offset is what
+  makes the day number unambiguous.
+
+The payload is self-describing via its `schema` field (`fsa-ngp-web/1`),
+a frozen contract with the web map: fields may be added, but existing
+ones are never renamed or reordered without bumping the schema.
 
 ## 🗺️ Relating FSA counties to Census counties
 
