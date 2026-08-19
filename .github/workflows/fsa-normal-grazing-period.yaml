@@ -2,23 +2,15 @@
 name: update
 run-name: Update the fsa-normal-grazing-period archive → S3
 
-# Only the inputs to the archive itself. The web map's own sources (js/, css/,
-# vendor/, index.html, tooling) are served from GitHub Pages and have no bearing on
-# what this pipeline writes to S3, so they must not spend an AWS run.
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - 'fsa-normal-grazing-period.R'
-      - 'R/**'
-      - 'README.Rmd'
-      - 'foia/**'
-      - '.github/workflows/fsa-normal-grazing-period.yaml'
+    paths: ['**.R', '**.qmd', '.github/workflows/**']
 
 permissions:
   id-token: write
-  contents: write  # commit-back of the archive outputs and the rendered README
+  contents: write  # commit-back of rendered README and dashboard
 
 concurrency:
   group: s3-archive-${{ github.repository }}
@@ -41,7 +33,7 @@ jobs:
     steps:
       - uses: mt-climate-office/actions/setup-geospatial@v1
         with:
-          extra-r-packages: quarto readxl khroma arrow
+          extra-r-packages: quarto readxl khroma ragg arrow
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
@@ -59,9 +51,9 @@ jobs:
       - name: Update archive
         run: Rscript fsa-normal-grazing-period.R
 
-      # Commit the archive outputs, the web map's data and color ramps, and the
-      # rendered README back to git; GitHub Pages serves the map from this repo.
-      # No-op runs skip the commit.
+      # Commit the archive outputs and rendered README and dashboard back to git;
+      # GitHub Pages serves the dashboard from this repo. No-op runs skip the
+      # commit.
       - name: Commit refreshed archive
         run: |
           git config --local user.name "github-actions[bot]"

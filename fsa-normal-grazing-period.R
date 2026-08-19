@@ -332,12 +332,8 @@ arrow::write_parquet(fsa_normal_grazing_period,
                      compression_level = 13,
                      use_dictionary = TRUE)
 
-## Browser assets for the web map: the column-oriented JSON the map reads, and the
-## two color ramps it colors with. Both are derived from the validated archive
-## above, so they cannot drift from the published CSV and Parquet.
-source("R/web-assets.R")
-build_web_data(fsa_normal_grazing_period)
-build_color_ramps()
+## Render the interactive dashboard
+quarto::quarto_render("fsa-normal-grazing-period.qmd")
 
 ## Render the README
 quarto::quarto_render("README.Rmd", output_format = "md")
@@ -376,9 +372,6 @@ cf_invalidate(
     paste0("/", s3_prefix, "/fsa-normal-grazing-period.csv"),
     paste0("/", s3_prefix, "/fsa-normal-grazing-period.parquet"),
     paste0("/", s3_prefix, "/qa-report.txt"),
-    paste0("/", s3_prefix, "/_manifest.txt"),
-    # The web map's data and color ramps are synced on every run; without this the
-    # edge would keep serving the previous archive's JSON until the cache expired.
-    paste0("/", s3_prefix, "/assets/*")
+    paste0("/", s3_prefix, "/_manifest.txt")
   )
 )

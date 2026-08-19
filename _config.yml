@@ -1,0 +1,11 @@
+title: FSA annual county-level normal grazing period data archive
+description: An an archive of the annual county-level normal grazing period data from the USDA Farm Service Agency
+author: R. Kyle Bocinsky
+url: "https://sustainable-fsa.com/fsa-normal-grazing-period/" # Your GitHub Pages URL
+baseurl: "/fsa-normal-grazing-period"
+
+remote_theme: jekyll/minima
+plugins:
+  - jekyll-remote-theme
+# minima:
+#   skin: classic
